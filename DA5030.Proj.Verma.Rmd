@@ -1,0 +1,806 @@
+---
+title: "Human Activity Recognition Based on Sensor Readings Using Machine Learning Algorithm"
+author: "Shivam Verma"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+
+# I. INTRODUCTION
+
+Phone applications nowadays can show you how many steps user have walked, ran, flights of stairs you have climbed, calories burnt, etc. On a similar line with growing demand of wearable technology, I inted to build such a classifier from scratch which is based on data from sensors already deployed in smartphones and smart watches able to identify the user activity. By doing this project I intend to gain practical knowledge of building classifiers and learn to implement machine learning concepts.
+
+Currently the Accuracy of these human activity classifiers are about 85% and improving them has many hurdles. Some of these being:
+
+1. High sampling rate of data is required, so more data needs to be processed every second.
+2. As dealing with physical attributes of users, the sensors used in the smartdevices vary greatly, a bias can greatly affect accuracy of classifier.
+
+# OBJECTIVE
+
+1. To determine the physical activities performed by the user based on accelerometer and gyroscope sensor data collected by user's smart devices and wearables.
+2. To determine factors influencing the classifier to make certain perdictions about the physical activity.
+
+## ATTRIBUTE INFORMATION
+
+The dataset consists of following attributes:
+
+Index: 		Is the row number.
+Arrival_Time:	The time the measurement arrived to the sensing application
+Creation_Time: The timestamp the OS attaches to the sample
+X,y,z: The values provided by the sensor for the three axes, X,y,z
+User:		The user this sample originates from, the users are named a to i.
+Model:		The phone/watch model this sample originates from
+Device:		The specific device this sample is from. They are prefixed with the model name and then the number, e.g., nexus4_1 or nexus4_2.
+Gt:		The activity the user was performing: bike sit, stand, walk, stairsup, stairsdown and still(phone is lying).
+
+Additional Information: Users executed activity in no specific order while carrying smart devices, consisting of two embedded sensors, i.e., Accelerometer and Gyroscope, sampled at the highest frequency the respective device allows(100Hz). Recordings of 9 users from 8 smartphones. Also due to issues with sampling some users have few collected samples for specific activities.
+
+
+# II DATA ACQUISITION
+
+The primary step for Data Aquisition is to gather data from the web source("UCI Machine Learning Repository"). The dataset could be found as "Hetrogeneity Activity Recognition Data Set". It includes 43930257 instances and 16 attributes. I will try to predict the different activities performed by a user. As this is a large datasets. I have combined the data using equal random sampling, in such a way that I get 2% of data from all 9 users from Phones_accelerometer, Phones_gyroscope, Watch_accelerometer & Watch_gyroscope file. Next, 20% of data is gathered from all classes present in gt(predictor class) from the previously combined file to create an equal random sample of data. Next data is gathered from Samsung.Galaxy.Gear file this file consists of "still" class. Finally, both the data frames are joined to result in a finaldata1 file which is used for modelling.
+
+```{r}
+library(caret)
+
+#reading csv file
+Phones_accelerometer <- read.csv("Phones_accelerometer.csv", header = TRUE)
+Phones_gyroscope <- read.csv("Phones_gyroscope.csv", header = TRUE)
+Watch_accelerometer <- read.csv("Watch_accelerometer.csv", header = TRUE)
+Watch_gyroscope <- read.csv("Watch_gyroscope.csv", header = TRUE)
+
+
+# Getting 2% of data from all 9 users from Phones_accelerometer file
+partition1 <- createDataPartition(Phones_accelerometer$User, p = 0.02, list = FALSE)
+# Creating dataframe with partition
+data1 <- Phones_accelerometer[partition1, ]
+# Creating new derived feature(signifying data is from which sensor)
+data1$sensor <- "Phones_accelerometer"
+# Getting 2% of data from all 9 users from Phones_gyroscope file
+partition2 <- createDataPartition(Phones_gyroscope$User, p = 0.02, list = FALSE)
+# Creating dataframe with partition
+data2 <- Phones_gyroscope[partition2, ]
+# Creating new derived feature(signifying data is from which sensor)
+data2$sensor <- "Phones_gyroscope"
+# row binding the two dataframes acquired from Phones_accelerometer & Phones_gyroscope file
+newdata <- rbind(data1, data2)
+# Removing the null class from gt(ground truth) as it doesn't signify anything
+newdata <- newdata[-which(newdata$gt == "null"),]
+# Getting 20% of data from all classes present in gt from file newdata to create an equal random sample
+partition3 <- createDataPartition(newdata$gt, p = 0.2, list = FALSE)
+# Creating dataframe with partition
+newdata1 <- newdata[partition3, ]
+# Getting 2% of data from all 9 users from Watch_accelerometer file
+partition4 <- createDataPartition(Watch_accelerometer$User, p = 0.02, list = FALSE)
+# Creating dataframe with partition
+data3 <- Watch_accelerometer[partition4, ]
+# Creating new derived feature(signifying data is from which sensor)
+data3$sensor <- "Watch_accelerometer"
+# Getting 2% of data from all 9 users from Watch_gyroscope file
+partition5 <- createDataPartition(Watch_gyroscope$User, p = 0.02, list = FALSE)
+# Creating dataframe with partition
+data4 <- Watch_gyroscope[partition5, ]
+# Creating new derived feature(signifying data is from which sensor)
+data4$sensor <- "Watch_gyroscope"
+# row binding the two dataframes acquired from Watch_accelerometer & Watch_gyroscope file
+watchdata <- rbind(data3, data4)
+# Removing the null class from gt(ground truth) as it doesn't signify anything
+watchdata <- watchdata[-which(watchdata$gt == "null"),]
+# Getting 20% of data from all classes present in gt from file newdata to create an equal random sample
+watchdata1 <- createDataPartition(watchdata$gt, p = 0.2, list = FALSE)
+# Creating dataframe with partition
+watchdata1 <- watchdata[watchdata1, ]
+# row binding the two dataframes acquired from newdata1 & watchdata1
+finaldata <- rbind(newdata1, watchdata1)
+# Removing the index as it doesn't signify anything
+finaldata <- finaldata[,-1]
+
+# reading csv file
+Samsung.Galaxy.Gear <- read.csv("Samsung-Galaxy-Gear.csv", header = TRUE)
+# Assigning NA values to user as user value not available, will impute in further steps
+Samsung.Galaxy.Gear$User <- NA
+# Specifying the model type
+Samsung.Galaxy.Gear$Model <- "Samsung_galaxy"
+# Specifying the device type
+Samsung.Galaxy.Gear$Device <- "gear_2"
+# Specifying the class(ground truth) for dataframe
+Samsung.Galaxy.Gear$gt <- "still"
+# Specifying the sensor
+Samsung.Galaxy.Gear$sensor <- "Gear_sensor"
+# Removing the index as it doesn't signify anything
+Samsung.Galaxy.Gear <- Samsung.Galaxy.Gear[,-1]
+# Getting 20% of data from all classes present in gt from file Samsung.Galaxy.Gear to create an equal random sample
+partition6 <- createDataPartition(Samsung.Galaxy.Gear$gt, p = 0.2, list = FALSE)
+# Creating dataframe with partition
+still_data <- Samsung.Galaxy.Gear[partition6, ]
+# Creating finaldata by binding data from all 5 files
+finaldata1 <- rbind(finaldata, still_data)
+# Removing the unwanted levels from final dataset
+finaldata1$gt <- droplevels(finaldata1$gt)
+finaldata1$sensor <- as.factor(finaldata1$sensor)
+```
+
+
+# III DATA EXPLORATION
+
+## Data Exploratory Plots
+
+This is a crucial step for the project as it provides information about the nature of data which helps in feature engineering. Exploration of features using various visualizations to check for skewness and distribution. I begin this step by printing the summary of the final dataset, it point outs to the fact that there are some NA values in the data and the predictor class is evenly distributed. Using str() data types of all features are explored. Histograms and goodness of fit graphs, plotted to analyze skewness in numeric features, it is observed x,y,z axis values follows normal distribution whereas Arrival time and Creation Time are not following normal distribution and skewness could be observed from plots. Thus, there is a need for normalization. Next, plot is a 3-D scatterplot that has x,y,z axis and activity performed. Analyzing this visualization strengthens the claim that blue point scatter plots which are stairsdown has a high altitude(z-axis value) in a 3-D space and all activities coordinates are closely related in terms of position in a 3-D space, thus we can observe a dense cluster. Next visualization is a pheatmap of random 0.02% of sensor readings, this signifies how x,y&z values varies from eachother in a random sample. The bar plot is to visualize how counts of sensor readings varies in data(It is observed gear_sensor has the least count)
+
+
+```{r}
+# Data Exploration
+# Printing the summary of final dataset
+summary(finaldata1)
+# Printing the structure of final dataset
+str(finaldata1)
+
+# Data Exploratory plots
+
+library(fitdistrplus)
+# loop to generate histogram
+for(i in 1:ncol(finaldata1)) {
+  # checking for the class of feature
+if (class(finaldata1[,i]) =="integer"| class(finaldata1[,i]) =="numeric"){ paste0("Histogram for : ", colnames(finaldata1[i]))
+ print(paste0("This graph is for : ", colnames(finaldata1[i])))
+  descdist(as.numeric((finaldata1[,i])), discrete = FALSE)
+   # generating histogram
+  h <- hist((finaldata1[,i]), xlab = colnames(finaldata1[i]))
+  xfit <- seq(min(finaldata1[,i]), max(finaldata1[,i]), length = 40) 
+  
+  yfit <- dnorm(xfit, mean = mean(finaldata1[,i]), sd = sd(finaldata1[,i])) 
+  
+  yfit <- yfit * diff(h$mids[1:2]) * length(finaldata1[,i])
+  lines(xfit, yfit, col = "black", lwd = 2)
+}
+else{} }
+
+library(scatterplot3d)
+# creating jitters for x-axis
+a1<- jitter((finaldata1[,3]),factor = 3)
+# creating jitters for y-axis
+a2<-jitter((finaldata1[,4]),factor = 5)
+# creating jitters for z-axis
+a3<-jitter((finaldata1[,5]),factor = 20)
+# creating dataframe for plotting scatterplot
+b1<- data.frame(x=a1,y=a2,z=a3 , colors1= finaldata1$gt)
+# assigning hexcodes for colors
+colors <- c("#999999", "#E69F00", "#56B4E9", "#63B932", "#000000" , "#E93473" , "#6634E9")
+colors <- colors[as.numeric(b1$colors1)]
+# Plotting 3-D scatter plot
+scatterplot3d::scatterplot3d(b1[,-4] , color =colors, main = "Scatter Plot for x, y & z axis" )
+
+library(pheatmap)
+# creating random sample of 0.02% of data
+set.seed(123)
+s <- sample(nrow(finaldata1), 0.0002*nrow(finaldata1))
+# plotting pheatmap
+pheatmap(finaldata1[s,3:5], cluster_rows= F, cluster_cols= F, main = "Pheatmap of x,y&z axis for random 0.02% of sensor readings")
+
+library(dplyr)
+# grouping and counting sensors 
+sen <- finaldata1 %>% 
+  group_by(finaldata1$sensor) %>% 
+  summarise(count= n())
+# renaming the columns
+colnames(sen) <- c("sensor","count")
+# Plotting bar plot
+ggplot() + geom_bar(data=sen, aes(x=sensor, y=count),stat="identity") + ggtitle("Count of sensor readings")
+
+      
+```
+
+## Detection of outliers
+
+Next step towards data exploration is outlier detection, for outlier detection I used z-score method, that is any point beyond plus-minus three standard deviation is considered as an outlier. Printing the outlier row number, I am detecting the outliers in this step, but I'm not going to remove it as there are ver few of them and doesn't creates a problem for further analysis. Thus keeping them in the data.
+
+```{r}
+# creating for loop to loop over all coloumns
+for(i in 1:ncol(finaldata1)) {
+  # checking for the class of feature
+if (class(finaldata1[,i]) =="integer"| class(finaldata1[,i]) =="numeric"){
+  # getting mean
+  meanCom <- mean(finaldata1[,i])
+  sdCom <- sd(finaldata1[,i])
+  # getting 3 * standard devaition
+  sdCom <- sdCom * 3
+  print(colnames(finaldata1[i]))
+    # printing row numbers which include outliers in each column
+    print(length(which(finaldata1[,i] > meanCom + sdCom | finaldata1[,i] < meanCom - sdCom)))
+}
+}
+```
+
+
+## Colinearity Analysis
+
+For correlation plotting, corrplot() function to plot the correaltion is used . It creates a square matrix with colour code as blue colour refers to highly correlated as 1, and red colour as negatively correlated. As observed in graph below, Arrival Time and y-axis values are negatively correlated to eachother.
+For collinearity used pairs.panels(), to create collinearity matrix for numeric feature values as observed in graph below, no feature values has high collinearity with eachother.
+
+
+```{r}
+# printing collinearity matrix
+print("Correlation Matrix")
+corrplot::corrplot(cor(finaldata1[,1:5]), method = "square", na.label = " ")
+library(psych)
+pairs.panels(finaldata1[,1:5])
+```
+
+
+# IV DATA CLEANING & SHAPING
+
+## Data imputation
+
+Missing values are commonly imputed using mean, mode. For numerical values imputation is done using mean on the other hand, categorical variables are imputed using mode. R doesn't have an inbuilt mode() functoion. Hence, creating own function for imputation.
+
+```{r}
+library(Hmisc)
+
+# Creating own mode function for imputaion of categorical values
+mode <- function(x) {
+   uniq <- unique(x)
+   uniq[which.max(tabulate(match(x, uniq)))]
+}
+# Getting row numbers with missing user values
+na_val <- which(is.na(finaldata1$User))
+# Imputing missing user values with mode of users
+finaldata1$User[na_val] <- mode(finaldata1$User[-na_val])
+# Summarizing data
+summary(finaldata1)
+```
+
+## Normalization of feature values
+
+Normalizing features using Z-score normalization. It gives us values with zero mean and 1 standard deviation.
+After normalizing tried pca analysis clusters within data points could be observed.
+
+```{r}
+# Creating a copy of final data 
+copy <- finaldata1
+copy$User <- as.numeric(as.factor(copy$User))
+copy$Model <- as.numeric(as.factor(copy$Model))
+copy$Device <- as.numeric(as.factor(copy$Device))
+copy$sensor <- as.numeric(as.factor(copy$sensor))
+# normailization function
+normalize <- function(x){
+  return ((x - mean(x))/ sd(x))
+}
+
+
+# applying normalization on all values except predictor class(gt)
+data_norm <- as.data.frame(apply(copy[,-9], 2, normalize))
+# Adding predictor class(gt) to normalized data
+data_norm$gt <- copy$gt
+```
+
+
+## PCA analysis
+
+Applying the PCA analysis on the normalized data to get an idea of features, how many of them are actually relevant. Used prcomp() function on whole dataset except predictor class, and then plotted the pca, using autoplot(). 
+After plotting PCA it can be observed the data points are clustered without any distribution, ideally there should be 7 clusters as data has 7 predictor classes. This distortion is due to the fact that sensor values don't varies much and has similar axis readings thus, few clusters are observed and all features must be considered for modelling. Next, analyzed using scree plot to plot the variances in features against the number of principal components. 
+
+```{r}
+library(locfit)
+library(factoextra)
+library(ggfortify)
+library(ggplot2)
+
+# pca plot after cleaning
+pca.data <- prcomp(data_norm[,-10], )
+# pca plot
+autoplot(pca.data, data = data_norm[,-10])
+# scree plot
+fviz_eig(pca.data)
+```
+
+## Feature Engineering: new derived features 
+
+While creating the creating the data for model deployment. I added sensor feature on my own which was not present originally(mentioned in above chunks) this was to map which reading is coming from which sensor.
+
+
+# V MODEL CONSTRUCTION & EVALUATION
+
+## Creation of Training & Validation subsets
+
+Creating training and testing data set using random sampling function with 75% train data and 25% test data.
+
+```{r}
+# creating random sample of 75% for train data and 25% for test data
+set.seed(123)
+sample <- sample(nrow(data_norm), 0.75*nrow(data_norm))
+# train data
+train <- data_norm[sample, ]
+# test data
+test  <- data_norm[-sample, ]
+paste0("Train has : ", nrow(train), " number of rows")
+paste0("Test has : ", nrow(test), " number of rows")
+```
+
+## Construction of Machine Learning Models
+
+## Models Implemented
+
+## 1. K-NN 
+## 2. Decision Trees
+## 3. Support Vector Machines
+## 4. Random Forest
+## 5. Naive Bayes
+## 6. Neural Network
+
+# K-NN
+
+## Data Preparation : Normalized the data so that all the predictors are in same scale. Also, Converted the predictor class to numeric for optimal results.
+
+
+Creating the first classification model K-NN, using class library & function knn() on train(75% of data) and test data(25% of data), setting the k value as 7, as there is chances of 7 groups of data based on different classes present in dataset.
+Testing the model on test dataset using predict feature and holdout method for verification. KNN basically uses euclidean distance algorithm to find out the class of data point based on nearest given k value. KNN algorithm works  great for this dataset it gives an accuracy of 99.87%
+
+
+```{r}
+
+library(class)
+# Creating data for model
+knn_numeric_data <- data_norm
+# Converting the predictor class to numeric
+knn_numeric_data$gt <- as.numeric(as.factor(knn_numeric_data$gt))
+# Creating test and train data
+knn_train <- knn_numeric_data[sample, ]
+knn_test  <- knn_numeric_data[-sample, ]
+# Generating knn model
+knn_model <- knn(knn_train, knn_test, cl = knn_train$gt, k = 7)
+# Printing the confusion matrix
+knn_matrix <- confusionMatrix(knn_model, as.factor(knn_test$gt))
+knn_matrix
+```
+
+## Tuning the Model
+
+Performed tuning of model by varying k values. Also plotted a k v/s error graph for 20 k values. Best accuracy of  observed for k value = 1. As k value increases error also increases. 
+
+```{r}
+
+# data frame to store error and k value
+model_knn <- data.frame("k" = 1:20, "error" = 0)
+# loop for computing accuracy of knn model
+for (i in 1:20){
+  # Generating the knn model
+  knn_model_dif_k <- knn(knn_train, knn_test, cl = knn_train$gt, k = i)
+  # getting the accuracy of model
+  accuracy <- confusionMatrix(knn_model_dif_k, as.factor(knn_test$gt))$overall[1]
+  # getting the error of model
+  model_knn$error[i] <- 1 - accuracy
+}
+# plotting the points using ggplot()
+ggplot(data = model_knn, aes(x = k, y =error)) + geom_line()+ geom_point()
+
+```
+
+# DECISION TREE
+
+## Data Preperation for model : Transformed all categorical variables into numeric and factors except the predictor class
+
+
+Creating the second classification model Decision Tree using party library & function ctree() on train data(75% of data) and test data(25% of data). First, created controlled tree with tree growth control parameter to make it more fast, as creating decision tree for this large data set takes too much computation power and time. And with controlled growth parameter of mincriterion to divide as 90% interval and minsplit as atleast 300, resulted in accuracy of 67.46%
+
+To improve the accuracy of the model further, I used the tuning method and let the tree grow without any control parameters. And at this time without any paramters, tree with full length gives us accuracy of 75%, which is better than previous decision tree.
+
+
+```{r}
+
+library(party)
+library(rpart)
+# Generating decision tree model
+decision_tree <- ctree(gt ~., data = train, controls = ctree_control(mincriterion = 0.90, minsplit = 300))
+# Predicting the test data
+prediction_tree <- predict(decision_tree, test)
+# printing the confusion matrix
+d_matrix1 <- confusionMatrix(prediction_tree, test$gt)
+d_matrix1
+```
+
+## Tuning the Decision tree
+
+```{r}
+# Decision tree without growth control
+
+# Generating decision tree model without growth control
+decision_tree2 <- ctree(gt ~., data = train)
+# Predicting the test data
+prediction_tree2 <- predict(decision_tree2, test)
+# Printing the confusion matrix
+d_matrix2 <- confusionMatrix(prediction_tree2, test$gt)
+d_matrix2
+```
+
+
+# SUPPORT VECTOR MACHINE
+
+## Data Preparation for model : Transformed all categorical variables into numeric and factors except the predictor class
+
+Creating the third classification model SVM using kernlab library and ksvm() function on train data(75% of data) and test data(25% of data). Finally, testing the model on test dataset using predict feature and holdout method for verification. Acheived an accuracy of 29.23%. It could be said that SVM is not efficient on this data.
+
+To improve the accuracy of the model (29.55%) further, I did tuning to the model and changed to better kernel. Different kernel gives us accuracy of 45%, which is better than previous svm model.
+
+```{r}
+library(kernlab)
+# Generating svm model
+model_svm1 <- ksvm(gt ~. , data= train, kernel= "vanilladot")
+# predicting the test data class
+prediction_svm1 <- (predict(model_svm1, test))
+# Printing the confusion matrix for model
+svm_matrix1 <- confusionMatrix(prediction_svm1, as.factor(test$gt))
+svm_matrix1
+```
+
+## Tuning the Model
+
+```{r}
+# Generating svm model
+model_svm2 <- ksvm(gt ~. , data= train, kernel= "rbfdot")
+# predicting the test data class
+prediction_svm2 <- (predict(model_svm2, test))
+# Printing the confusion matrix for model
+svm_matrix2 <- confusionMatrix(prediction_svm2, as.factor(test$gt))
+svm_matrix2
+```
+
+# RANDOM FOREST
+
+## Data Preparation for model : Transformed all categorical variables into numeric and factors except for the predictor class
+
+
+Creating the fourth classification model Random Forest using randomForest library and function on train data(75% of data) and test data(25% of data). Finally, testing the model on test dataset using predict feature and holdout method for verification. Acheived an accuracy of 93.42%
+
+
+```{r}
+library(randomForest)
+# Generating Random forest model
+rf_model <- randomForest::randomForest(gt ~., data = train)
+# Predicting the test data
+prediction_rftree <- predict(rf_model, test[,-10])
+# Printing the confusion matrix for model
+rf_matrix <- confusionMatrix(prediction_rftree, test$gt)
+rf_matrix
+```
+
+# NAIVE BAYES
+
+## Data Preparation for model : Using the unscaled data, keeping categorical variables as factors, converting numeric variables to bins.
+
+Creating the fifth classification model Naive Bayes using e1071 library and function naivebayes() on train data(75% of data) and test data(25% of data). Finally, testing the model on test dataset using predict feature and holdout method for verification. Acheived an accuracy of 27.4%. It could be said that Naive Bayes is not efficient on this data.
+
+
+```{r}
+library(SamplingStrata)
+library(e1071)
+# Creating copy of data
+nb_data <- finaldata1
+# creating 4 bins of feature values
+nb_data$Arrival_Time <- var.bin(nb_data$Arrival_Time, bins = 4)
+nb_data$Creation_Time <- var.bin(nb_data$Creation_Time, bins = 4)
+nb_data$x <- var.bin(nb_data$x, bins = 4)
+nb_data$y <- var.bin(nb_data$y, bins = 4)
+nb_data$z <- var.bin(nb_data$z, bins = 4)
+# converting to factor variables
+nb_data$User <- as.factor(nb_data$User)
+nb_data$Model <- as.factor(nb_data$Model)
+nb_data$Device <- as.factor(nb_data$Device)
+nb_data$gt <- as.factor(nb_data$gt)
+nb_data$sensor <- as.factor(nb_data$sensor)
+# creating test and train datasets
+set.seed(123)
+n_sample <- sample(nrow(nb_data), 0.75*nrow(nb_data))
+n_train <- nb_data[n_sample, ]
+n_test  <- nb_data[-n_sample, ]
+# generating the model
+nb_model <- naiveBayes(gt~. , data = n_train)
+# predicting the class for test 
+nb_predict <- predict(nb_model, n_test)
+# generating the confusion martix
+nb_matrix <- confusionMatrix(nb_predict, n_test$gt)
+nb_matrix
+```
+
+# NEURAL NETWORK
+
+## Data Preparation for model : Transformed all categorical variables into numeric including the predictor class.
+
+
+Creating the sixth classification model Neural Network using neuralnet library and function neuralnet() on train data(75% of data) and test data(25% of data). Finally, testing the model on test dataset using predict feature and holdout method for verification. Then, applied neuralnet algorithm with stepmax = 1e+08, and rep = 1, to make the prediction fast as data set is too big. With these parameter we got accuracy of around 29% which can be improved.
+To make this algorithm more efficient and increase accuracy as its a difficult task to do because dataset is too big, and it increases big O notation of that and increase time exponentially, for accuracy we are using Softplus smothening of the data with log, exponential function. To reduce the computational time of the model, also tuned some variables, like hidden threshold = 0.1, stepmax = 1e+08 from 1e+05, learningrate = 0.01 and linear output False, so this algorithm with large dataset can work in Polynomial time instead of Non-Polynomial time.
+
+
+```{r}
+library(neuralnet)
+# creating copy of data
+nn_data <- data_norm
+# converting predictor class to numeric
+nn_data$gt <- as.numeric(as.factor(nn_data$gt))
+# Generating test and train datasets
+train_NN <- nn_data[sample, ]
+test_NN <- nn_data[-sample, ]
+# Generating the model
+nn.model <- neuralnet(gt ~ ., data=train_NN, rep=1, stepmax = 1e+08, linear.output = F)
+# computing with original values
+nn.predict <- neuralnet::compute(nn.model, test_NN)
+# storing result in variable
+nn.result <- nn.predict$net.result
+# calculating correlation between values
+paste0("Correlation Neural Net with default parameters : ", round(cor(nn.result, test_NN$gt),2))
+
+```
+
+## Tuning the Model
+
+Although getting perfect 1 correlation which strengthens the fact that accuracy is pretty much high. But there could be a problem of overfitting for neural nets which is hard to resolve as it is a black box algorithm.
+
+```{r}
+# smoothning algorithm
+softplus <- function(x) {
+  log(1+exp(x))
+}
+set.seed(123)
+# tuned model with smoothning and different parameters to increase accuracy
+nn.model <- neuralnet(gt ~ ., data=train_NN, act.fct=softplus, threshold = 0.1, rep=1, stepmax = 1e+08, 
+                      linear.output = F, learningrate = 0.01)
+# computing with original values
+nn.predict <- neuralnet::compute(nn.model, test_NN)
+# storing result in variable
+nn.result <- nn.predict$net.result
+# calculating correlation between values
+#print("Correlation between default values and predicted values by Neural Net")
+nn.cor <- cor(nn.result, test_NN$type)
+paste0("Correlation by Neural Net with tuned paramters : ", round(nn.cor, 2))
+
+```
+
+
+# Evaluation of model using K- Fold Cross- Validation
+
+For K-fold validation, we are using createFolds() function from caret package. We are using 5 fold cross validation, and for models we are applying this on SVM and NaiveBayes. We created a function with random splitting of train data set in 5 parts, and passing each part as test one by one, and using other parts as train from svm and naiveBayes in each turn. This function take folds as argument. We printed out the results below as accuracy of each model, which only has slight variations.
+
+
+```{r}
+library(caret)
+# creating folds
+folds = createFolds(train$gt, k = 5)
+# function for cross validation, with paramter as folds
+cv = lapply(folds, function(x) {
+  
+  # creating training and testing data
+  training_fold = knn_train[-x, ]
+  test_fold = knn_train[x, ]
+  # model with train data
+  classifier = knn(training_fold, test_fold, cl = training_fold$gt, k = 7)
+  # confusion matrix
+  cm = confusionMatrix(as.factor(test_fold$gt), classifier)
+  
+  # extracting accuracy for each fold
+  accuracy = cm$overall[1]
+  return(accuracy)
+})
+print("K-Fold accuracy for kNN model")
+cv
+  
+```
+
+```{r}
+# creating folds
+folds = createFolds(train$gt, k = 5)
+# function for cross validation, with paramter as folds
+cv = lapply(folds, function(x) { 
+  
+  # creating training and testing data
+  training_fold = train[-x, ]
+  test_fold = train[x, ]
+  
+  # model with train data
+  classifier = randomForest::randomForest(gt ~., data =  training_fold)
+  # prediction with test data using predict function
+  y_pred = predict(classifier, test_fold[,-10])
+  # confusion matrix
+  cm = confusionMatrix(test_fold$gt, y_pred)
+  
+  # extracting accuracy for each fold
+  accuracy = cm$overall[1]
+  return(accuracy)
+})
+print("K-Fold accuracy for random forest model")
+cv
+
+
+```
+
+# Comparison of models and Result Interpretations
+
+For model comparision, first thing we did is stored all the values of acuracy of all models, along with the kappa values from confusion matrix in a data frame. I also created error percentage coloumn for each model, which is calculated by one minus accuracy. 
+
+The first graph would be to plot the accuracy of each model, using ggplot2, as a bar chart using acuracy based on cross-validation of models, by using test data set as holdout method for validation. On the X-axis there are 6 models, and on the Y-axis, there is accuracy from zero to one. KNN and Neural Network algorithm produced best reults for this dataset followed by random forest and decision tree, while SVM and Naive Bayes have lowest acuracy for this data.
+
+Next graph plotted is similar to previous graph but with Error rate instead of acuracy. It is observed naive Bayes has the highest error rate, while Neural network and KNN has the lowest error rate.
+
+For further comparison, using Random Forest as it is one of the best performing algorithm and SVM as it has low accuracy as compared to other models. Created two plots using ggplot2, geom_tile function for heatmap. This is a matrix plot for each class, colour frequency to show the accuracy of each class within model, so it's observed for NaiveBayes model "stairsdown" and "stairsup" class is often missclassified where as rest classes has nearly perfect accuracy.
+For SVM model class "walk" is often missclassified and  has poor acuracy and class "sit" has a good accuracy. 
+
+Comparison of models using ROC curve strengthens the claim that Decision tree is more efficient model for this dataset than naive bayes, this is beacuse for decision tree area under the curve is 0.98 which is pretty good on the other hand area under the curve for naive bayes is 0.57. 
+
+Hence different models could be deployed in real-world for specific classes to get optimal results.
+
+```{r}
+
+# Storing the Results of all models
+results <- data.frame("Accuracy" = c(knn_matrix$overall[1], d_matrix2$overall[1], svm_matrix2$overall[1], rf_matrix$overall[1], nb_matrix$overall[1], nn.cor), "KAPPA" = c(knn_matrix$overall[1], d_matrix2$overall[1], svm_matrix2$overall[1], rf_matrix$overall[1], nb_matrix$overall[1], nn.cor), "Models" = c("KNN", "Decision Tree", "SVM", "Random forest", "Naive Bayes", "Neural Network"))
+
+
+# storing error rate
+results$Error <- 1 - results$Accuracy 
+# result interpertation
+head(results,5)
+
+# setting row names as each model
+rownames(results) <- c("KNN", "Decision Tree", "SVM", "Random forest", "Naive Bayes", "Neural Network")
+# plotting accuracy bar chart
+ggplot(aes(x=Models, y=Accuracy), data=results) +
+    geom_bar(stat='identity', fill = 'blue') +
+    ggtitle('Comparative Accuracy of Models') +
+    xlab('Models') +
+    ylab('Overall Accuracy')
+# plotting error rate bar chart
+ggplot(aes(x=Models, y=Error), data=results) +
+    geom_bar(stat='identity', fill = 'blue') +
+    ggtitle('Comparative Error rate of Models') +
+    xlab('Models') +
+    ylab('Overall Error Rate')
+
+# plotting accuracy tile matrix for each class, for Random Forest
+ggplot(data=data.frame(rf_matrix$table)) + 
+    geom_tile(aes(x=Reference, y=Prediction, fill=Freq)) +
+    ggtitle('Prediction Accuracy for Classes in Cross-Validation (Random Forest Model)') +
+    xlab('Actual Classes') +
+    ylab('Predicted Classes from Model')
+# plotting accuracy tile matrix for each class, for SVM
+ggplot(data=data.frame(svm_matrix2$table)) + 
+    geom_tile(aes(x=Reference, y=Prediction, fill=Freq)) +
+    ggtitle('Prediction Accuracy for Classes in Cross-Validation (SVM Model)') +
+    xlab('Actual Classes') +
+    ylab('Predicted Classes from Model')
+
+# Plotting AUC curves for models(Decision Tree and Naive Bayes as these models workson probability principles)
+
+# Creating copy of data
+data_copy<- data_norm
+# Considering sit as dominant class
+data_copy$gt1<- ifelse(data_copy$gt== "sit" , "sit" ,"X_not_sit")
+data_copy <- data_copy[,-10]
+# adding new gt class with dominant class
+data_copy$gt1<- as.factor(as.character(data_copy$gt1))
+# creating test and train samples
+set.seed(123)
+sample_auc <- sample(nrow(data_copy), 0.75*nrow(data_copy))
+# train data
+train_auc <- data_copy[sample_auc, ]
+# test data
+test_auc <- data_copy[-sample_auc, ]
+
+# Generating decision tree model without growth control
+decision_tree2_auc <- ctree(gt1 ~., data = train_auc)
+# Predicting the test data getting results in probabilities
+prediction_tree2_auc <- predict(decision_tree2_auc, test_auc, type ="prob")
+
+# To get odd number of rows 
+odd<- seq(1,length(unlist(prediction_tree2_auc)),2)
+# Probabilities of class in a dataframe
+pq1<- data.frame("A" =  unlist(prediction_tree2_auc)[odd])
+
+# Determining the AUC value
+library(ROCR)
+p1.dt <- ROCR::prediction(pq1,as.factor(ifelse(test_auc$gt1== "sit",1,0)))
+rd.auc1 <- performance(p1.dt,"auc")
+rd.auc<- unlist(slot(rd.auc1,"y.values"))
+paste(" Area under the curve is " , rd.auc)
+# Plotting the ROC curve
+rd.auc2 <- performance(p1.dt,"tpr" , "fpr")
+plot(rd.auc2 , main= "ROC for Decision Tree")+
+text(.6,.6 ,expression(" AUC = 0.9891"),col="Red")
+
+# creating copy of binned data
+nb_copy <- nb_data
+# Considering sit as dominant class
+nb_copy$gt1<- ifelse(nb_copy$gt== "sit" , "sit" ,"X_not_sit")
+nb_copy <- nb_copy[,-9]
+# adding new gt class with dominant class
+nb_copy$gt1<- as.factor(as.character(nb_copy$gt1))
+# creating test and train samples
+set.seed(123)
+n1_sample <- sample(nrow(nb_copy), 0.75*nrow(nb_copy))
+# train data
+n1_train <- nb_copy[n1_sample, ]
+# test data
+n1_test  <- nb_copy[-n1_sample, ]
+# generating the model
+nb_mode_auc <- naiveBayes(gt1~. , data = n1_train)
+# predicting the class for test as probabilities
+nb_predict_auc <- predict(nb_mode_auc, n1_test , type="raw")
+
+# Determining the AUC value
+p1.nb <- ROCR::prediction(nb_predict_auc[,1],as.factor(ifelse(test_auc$gt1== "sit",1,0)))
+nb.auc1 <- performance(p1.nb,"auc")
+nb.auc<- unlist(slot(nb.auc1,"y.values"))
+paste(" Area under the curve is " , nb.auc)
+# Plotting the ROC curve
+nb.auc2 <- performance(p1.nb,"tpr" , "fpr")
+plot(nb.auc2 , main= "ROC for Naive Bayes")+
+text(.6,.6 ,expression(" AUC = 0.5704"),col="Red")
+
+```
+
+# Construction of ensemble model
+
+Creating an ensemble model using all the predictions done so far, and trying to build boosting and bagging algorithm using mode function to predict the final outcome as, we are predicting classes, so mode works best in analysing which one is best, and can be better than using mean and median fucntion. For ensembling, created a data frame with all the predictions by models in previous stages for test data set. As K-NN predicted numeric values of gt thus converted that to actual classes then, created mode function to calculate highest occuring class predicted by each models for particular sample. To calculate mode(created own function) then used apply() function, along each row one by one, and stored the final prediction in new variable in data frame. In the end created a confusion matrix to evaluate the accuracy and other factors.
+This ensemble model acheived an accuracy of 86.7% , this is not only a high accuracy but also increase the performance of each individual model also. 
+
+```{r}
+# creating new data frame for storing each prediction
+df <- data.frame(sample = (rownames(test)), nb = nb_predict, svm = prediction_svm2, tree = prediction_tree2, knn = knn_model, random_forest = prediction_rftree, original = test$gt)
+
+
+# creating data frame with all predictions
+ensemble.model <- data.frame(knn_model, prediction_tree2, nb_predict, prediction_svm2, prediction_rftree)
+rownames(ensemble.model) <- c() 
+ensemble.model$knn_model= as.numeric((ensemble.model$knn_model))
+ensemble.model$knn_model1 = 0
+
+# loop to convert KNN predictions
+for(i in 1: nrow(ensemble.model)){
+  if(ensemble.model$knn_model[i]==1)
+  {ensemble.model$knn_model1[i]= "bike"}
+  else if(ensemble.model$knn_model[i]==2)
+  {ensemble.model$knn_model1[i]= "sit"}
+  else if(ensemble.model$knn_model[i]==3)
+  {ensemble.model$knn_model1[i]= "stairsdown"}
+  else if(ensemble.model$knn_model[i]==4)
+  {ensemble.model$knn_model1[i]= "stairsup"}
+  else if(ensemble.model$knn_model[i]== 5)
+  {ensemble.model$knn_model1[i]= "stand"}
+  else if(ensemble.model$knn_model[i]==6)
+  {ensemble.model$knn_model1[i]= "walk"}
+  else if(ensemble.model$knn_model[i]==7)
+  {ensemble.model$knn_model1[i]= "still"}
+}
+
+# Coverting predictions to factors
+ensemble.model$knn_model1 <- as.factor(ensemble.model$knn_model1)
+# removing unwanted columnns
+ensemble.model = ensemble.model[,-1]
+
+# mode function
+calculate_mode <- function(x) {
+  uniqx <- unique(x)
+  uniqx[which.max(tabulate(match(x, uniqx)))]
+}
+
+# getting mode of each row to predict final outcome
+ensemble.model$Final <- apply(ensemble.model, 1, calculate_mode)
+head(ensemble.model)
+# Printing confusion matrix
+print("Ensemble model Confusion Matrix")
+test$gt <- factor(test$gt,levels(test$gt)[c(1,2,3,4,5,7,6)])
+levels(test$gt)
+ensemble_matrix <- confusionMatrix(as.factor(ensemble.model$Final), test$gt)
+ensemble_matrix
+paste0("Ensemble Model Accuracy : " ,(ensemble_matrix$overall[1]) * 100 , "%")
+```
+
+
+
+# SUMMARY
+
+Successfully managed to classify the actions of humans based on sensor data of gyroscope and accelerometer of smart-devices using machine learning algorithms. But there still remains scope of improvement. Some of the major improvements could be done removing sensor biases and doing a sophisticated feature extraction. Finally, for this dataset K-NN showed best accuracy of 99.87%.
+
+
+
