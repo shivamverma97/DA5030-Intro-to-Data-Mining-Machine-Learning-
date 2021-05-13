@@ -1,0 +1,154 @@
+---
+title: "Practice6_DA5030"
+author: "Shivam Verma"
+---
+
+```{r setup, include=TRUE, warning=FALSE}
+library(dplyr)
+library(psych)
+library(rpart)
+library(rpart.plot)
+library(RWeka)
+```
+Problem 1.
+
+Part1.
+```{r}
+student <- read.csv("student-mat.csv", sep = ";", header = TRUE, stringsAsFactors = TRUE)
+pairs.panels(student[, c(3, 30, 31, 33)])
+```
+
+Part 2.
+```{r}
+m <- lm(G3 ~ studytime+ traveltime+ freetime+ goout+ activities+ schoolsup+ famsup+ internet+ health+ G1+ G2, data= student)
+summary(m)
+```
+The lm function treats factors appropriately, so there is no need for additional column generation.
+
+Part 3. 
+Here, using backward elimination for model improvement using AIC measure.
+```{r}
+step(m, direction = "backward")
+```
+
+```{r}
+# New model with selected features
+new_m <- lm(G3 ~ studytime+ activities+ G1+ G2+ schoolsup, data = student)
+summary(new_m)
+```
+Part 4.
+```{r}
+# selecting 127th student to predict using multiple linear regression
+stu <- student[127,]
+student_pred<- predict(new_m, stu)
+se <- 1.925
+upper <- unname(student_pred + 1.96*(se))
+lower <- unname(student_pred - 1.96*(se))
+cat(sprintf("Predicted G3: %f \n95%% Confidence interval: [%f, %f]", student_pred, lower, upper))
+
+```
+
+Part 5.
+```{r}
+RMSE <- sqrt(mean(new_m$residuals^2))
+RMSE
+```
+
+Problem 2.
+
+Part 1.
+```{r}
+student$PF <- ifelse(student$G3 < 10, "F", "P")
+student$PF_dummy <- ifelse(student$PF=="P", 1, 0)
+```
+
+Part 2. 
+```{r}
+model <- glm(PF_dummy ~ studytime+ traveltime+ freetime+ goout+ activities+ schoolsup+ famsup+ internet+ health+ G1+ G2, data= student, family = "binomial")
+summary(model)
+# eliminating features using AIC 
+step(model, direction = "backward")
+```
+Part 3. Regression equation is G3 = -18.3691 -0.5403(studytime) + 0.6596(traveltime) -0.3088(goout) + 2.189(G1) + 1.9138(G2)
+
+Part4. 
+```{r}
+new_model <- glm(PF_dummy ~ studytime+ traveltime +goout + G1 + G2, data= student, family = "binomial")
+summary(new_model)
+```
+
+```{r}
+stu_pred<- predict(new_model, student, type = "response") 
+table(round(stu_pred), student$PF_dummy)
+```
+
+Part 4. 
+```{r}
+accuracy <- (113 + 247)/ length(stu_pred)
+accuracy*100
+```
+
+Problem 3.
+Part 1. 
+Step 2- Exploring the data
+```{r}
+wine <- read.csv("whitewines.csv")
+str (wine)
+hist(wine$quality)
+# wine quality is fairly normal
+```
+Splitting data into test and training data 
+```{r}
+wine_train <- wine[1:3750, ]
+wine_test <- wine[3751:4898, ]
+```
+Step 3- training a modle on the data 
+```{r}
+m.rpart <- rpart(quality ~ . , data= wine_train)
+m.rpart
+```
+Visualizing the decision trees
+```{r}
+rpart.plot(m.rpart, digits =  3)
+# adding additional parameters to adjust the visualization
+rpart.plot(m.rpart, digits = 4, fallen.leaves = TRUE, type = 3, extra = 101)
+```
+Step 4- Evaluating model performance
+```{r}
+p.rpart <- predict(m.rpart, wine_test)
+summary(p.rpart)
+summary(wine_test$quality)
+# finding correlation to measure relationship
+cor(p.rpart, wine_test$quality)
+```
+Performance evaluation using mean absolute error 
+```{r}
+MAE <- function(actual, predicted) { mean(abs(actual - predicted))
+}
+# Assessing quality score of model and prediction by mean
+MAE(p.rpart, wine_test$quality)
+
+mean(wine_train$quality)
+
+MAE(5.88, wine_test$quality)
+
+```
+Step 5- improving model performance
+```{r}
+# using M5P algorithm
+m.m5p <- M5P(quality ~ . , data= wine_train)
+m.m5p
+summary(m.m5p)
+p.m5p <- predict(m.m5p, wine_test)
+summary(p.m5p)
+cor(p.m5p, wine_test$quality)
+MAE(wine_test$quality, p.m5p)
+
+```
+
+Part 2.
+```{r}
+RMSE <- (sqrt(sum(wine_test$quality-p.m5p)^2/length(wine_test$quality)))
+RMSE
+```
+
