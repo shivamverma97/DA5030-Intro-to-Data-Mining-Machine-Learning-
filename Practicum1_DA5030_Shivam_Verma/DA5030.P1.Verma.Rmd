@@ -1,0 +1,381 @@
+---
+title: DA5030.P1.Verma
+author: "Shivam Verma"
+output: pdf_document
+---
+
+```{r setup, include=TRUE}
+library(dplyr)
+library(class)
+library(caret)
+library(gmodels)
+```
+##Problem 1
+
+Question 1. 
+Read and load the csv file.
+```{r}
+g <- read.csv("glass.csv", header = FALSE)
+# Renaming the headers
+colnames(g) <- c("ID","RI","Na","Mg", "Al","Si", "K","Ca", "Ba", "Fe", "Type")
+```
+Question 2. 
+```{r}
+#Exploring the dataset
+head(g)
+```
+Question 3.
+After Visually examining the histogram we can say that the data is not perfectly normally distributed.
+```{r}
+# Histogram of refractive index with overlayed normal curve
+x<- g$RI
+h<-hist(x, breaks=20, col="red", xlab="Refractive Index", main="Histogram with Normal Curve") 
+xfit<-seq(min(x),max(x),length=50) 
+yfit<-dnorm(xfit,mean=mean(x),sd=sd(x)) 
+# Visualization of data if it fits normally
+yfit <- yfit*diff(h$mids[1:2])*length(x) 
+lines(xfit, yfit, col="blue", lwd=2)
+```
+
+Question 4. 
+KNN is a non-parametric algorithm as this algorithm does not make any assumptions of the distribution of the data set. Thus, there's no necessity that dataset have to be normally distributed to apply KNN.
+```{r}
+# KNN is a non-parametric algorithm as this algorithm does not make any assumptions of the distribution of the data set.
+```
+Question 5. 
+Identified outliers for each columns using a z-score deviation approach, i.e., considered any values that are more than 2 standard deviations from the mean as outliers. 
+
+We can drop outliers or replace with the nearest “good” data or replace it with the mean or the median. 
+```{r}
+# Created a dataset containing only numeric values to find outliers.
+df <- g[,c(2:11)]
+# Identifying the outliers.
+for (i in 1:9) {
+zscore <- abs(((df[,i] - mean(df[,i]))) / (sd(df[,i])))
+outliers <- which(zscore > 2) 
+# Printing row numbers which include outliers in each column.
+print(colnames(df[i]))
+print(outliers)
+}
+
+```
+Question 6. 
+Normalizing the numeric columns, except the last one (the glass type), using z-score standardization.
+```{r}
+# Normalizing df as it excludes ID. 
+for (i in 1:9) {
+ 
+  df[,i] <- (((df[,i] - mean(df[,i]))) / (sd(df[,i])))
+
+}
+head(df)
+```
+Question 7.
+Created a partition of data into valid and train, including 20% of each of the glass type in both data using CreateDataPartition function from caret package on the bases of glass type.
+```{r}
+index <- createDataPartition(y = df$Type, p = 0.2, list = FALSE)
+# creating valid and train sets
+knn_train <- df[-index,] 
+knn_valid <- df[index,]
+head(knn_train)
+head(knn_train )
+```
+Question 8.
+Created a KNN prediction model to predict unkown glass type of 2 new samples, it will take normalized data of both train and new data and predict the type of glass on based on nearest eucledian distance calculated using sqrt of sum of each element in row and the ordering it to ascending order and extracting nearest neighbours.
+```{r}
+# creating new dataframe to normalize new variables for prediction.
+k <- g[-1]
+# adding the new variables to the dataset so that everything gets normalized at one go.
+k[215,] <- c(1.51621, 12.53, 3.48, 1.39, 73.39, 0.60, 8.55, 0.00, 0.08, 0)
+k[216,] <- c(1.5893, 12.71, 1.85, 1.82, 72.62, 0.52, 10.51 ,0.00, 0.05, 0)
+# Normalizing using z-scores.
+for (i in 1:9) {
+ 
+  k[,i] <- (((k[,i] - mean(k[,i]))) / (sd(k[,i])))
+
+}
+# arranging normalized data to apply knn.
+# b,c are unknown cases
+a <- k[1:214, c(1:10)]
+b <- k[215, c(1:9)]
+c <- k[216, c(1:9)]
+
+# Created mode function
+mode <- function(x)
+{
+  uniqx <- unique(x)
+  uniqx[which.max(tabulate(match(x,uniqx)))]
+}
+
+# Manually created KNN function.
+get_type <- function(x){
+  # empty array to store distance
+  d <- numeric(214)
+  for(i in 1:214)
+  {
+    # calculating euclidean distance
+    d[i] <- sqrt(sum((a[i,(1:9)]- x[1, (1:9)])^2))  
+  }
+# getting top 5 nearest neighbours as k = 5
+neighbor <- k$Type[order(d)] [1:5]
+(mode(neighbor))
+
+}
+
+# passing arguments in fucntion
+unknown1_type <- get_type(b)
+unknown2_type <- get_type(c)
+# printing result
+print(paste0("Type of first Unkown Element : " , unknown1_type ))
+
+print(paste0("Type of second Unkown Element : " , unknown2_type))
+```
+Question 9.
+Applied the knn function from the class package
+```{r}
+
+predUnk1 <- knn(train = a[,1:9], test = b[1,1:9], cl = a$Type, k=10)
+predUnk2 <- knn(train = a[,1:9], test = c[1,1:9], cl = a$Type, k=10)
+
+# printing result
+print(paste0("Type of first Unkown Element : " , predUnk1))
+print(paste0("Type of Second Unkown Element : " , predUnk2))
+```
+Question 10. 
+Create a plot of k (x-axis) from 2 to 10 versus error rate (percentage of incorrect classifications) for both algorithms using ggplot.
+```{r, warning=FALSE, error=FALSE}
+set.seed(123)
+# creating test and valid data
+train <- knn_train[,1:9]
+test <- knn_valid[,1:9]
+# setting type of train data
+train_labels <- knn_train$Type
+# empty array to store values
+trainPred <- rep(0, nrow(train))
+# empty data frame to store errors
+newCl <- data.frame(k= c(2:10) , perc_error = rep(NA, 9))
+
+for(i in 2:10)
+{
+  # class package knn to predict type
+  trainPred <- knn(train = train, test = test, train_labels, i)
+  # calculating error percentage on base of results
+  newCl[i-1,2] <- sum(train_labels != trainPred) / nrow(train) *100
+}
+
+# Mode function
+mode <- function(x)
+{
+  uniqx <- unique(x)
+  uniqx[which.max(tabulate(match(x,uniqx)))]
+}
+
+# Manually created KNN function.
+get_type <- function(x,k){
+  # empty array to store distance
+  d <- numeric(214)
+  for(i in 1:214)
+  {
+    # calculating euclidean distance
+    d[i] <- sqrt(sum((df[i,(1:9)]- df[x, (1:9)])^2))  
+  }
+# getting top 5 nearest neighbours as k = 5
+neighbor <- df$Type[order(d)] [1:k]
+(mode(neighbor))
+
+}
+# creating test and valid data
+train <- knn_train[,1:9]
+test <- knn_valid[,1:9]
+train_labels1 <- knn_train$Type
+# empty array to store values
+trainPred1 <- rep(0, nrow(train))
+# empty data frame
+newCl1 <- data.frame(k= c(2:10) , perc_error = rep(NA, 9))
+for (i in 2:10){
+# class package knn to predict type
+# getting prediction for each row in test dataset and storing value in new array 
+  for (j in 1:nrow(test)){
+trainPred1[j] <- get_type(rownames(test)[j],i) }
+  # calculating error percentage on base of results
+newCl1[i-1,2] <- sum(train_labels1 != trainPred1) / nrow(train) * 100 }
+
+# Plotting k vs error graph for Class package KNN
+ggplot(newCl, aes(x=newCl[,1], y = newCl[,2])) + geom_line(aes(color="Class KNN Error")) + geom_point() + xlab("K Value") + ylab("Error Percentage") + ggtitle("K versus Error Graph with Class package KNN")
+
+# Plotting k vs error graph for Custom built KNN
+ggplot(newCl1, aes(x=newCl1[,1], y = newCl1[,2])) + geom_line(aes(color="Custom KNN Error")) + geom_point() + xlab("K Value") + ylab("Error Percentage") + ggtitle("K versus Error Graph with Custom built KNN") 
+
+
+
+```
+
+Question 11.
+Cross-table confusion matrix showing accuracy for class package knn with k = 5
+```{r}
+
+# passing knn prediction with k = 5
+Pred <- knn(train = knn_train[,1:9], test = knn_valid[,1:9], cl = knn_train$Type, k=5)
+# printing confusion matrix
+CrossTable(x= knn_valid$Type, y=Pred, prop.chisq = FALSE)
+# printing confusion matrix from caret for accuracy
+caret::confusionMatrix(factor(knn_valid$Type), factor(Pred))
+
+```
+Question 12.
+Imputed missing values in 4th column in modified glass data using prediction with manually builded knn.reg with weighted average as linear regression. For using K = 4
+```{r}
+# Reading the data set
+g_missing <- read.csv("glass.data_missing_values.csv", header = FALSE)
+# renaming the columns
+colnames(g_missing) <- c("ID","RI","Na","Mg", "Al","Si", "K","Ca", "Ba", "Fe", "Type")
+# locating the NA values
+which(is.na(g_missing), arr.ind=TRUE)
+target_data <- data.frame (Mg=g_missing[,4])
+# removing ID and Mg for training data
+train_data <- (g_missing[, c(-1,-4)])
+train_data_N <- train_data 
+for (i in 1:ncol(train_data_N)){
+  # skipping type to normalize
+  if (i == 10){}
+  else{ train_data_N[i] <- (train_data_N[i] - min(train_data_N[i])) / (max(train_data_N[i])- min(train_data_N[i])) }
+}
+# getting normalized rows to impute their values
+new_data <- train_data_N[c(20,30,95,163,169,184,194,200,208),]
+train_data_N <- train_data_N[-c(20,30,95,163,169,184,194,200,208),]
+sumW <- 0
+sumK <- 0
+# custom weighted avg knn function to predict
+knn.reg <- function(new_data, target_data, train_data, k)
+{
+  # empty array for eucledian distance
+  euc_dist <- numeric(nrow(train_data))
+  # calculating euclidean distance
+  for(i in 1:nrow(train_data))
+  {
+    euc_dist[i] <- sqrt(sum((train_data[i,(1:9)]- new_data[1, (1:9)])^2))  
+  }
+  # getting K nearest neighbours
+  neighbor_knnreg <- target_data[order(euc_dist),] [1:k]
+  
+  # calculating weighted average
+  for (j in 1:k)
+  {
+    if(j==1){
+      sumW <- sumW + (neighbor_knnreg[j]*3)
+      sumK <- 3 + sumK
+    }
+    else if (j==2){
+      sumW <- sumW + (neighbor_knnreg[j]*2)
+      sumK <- 2 + sumK
+    }
+    else{
+      sumW <- sumW + (neighbor_knnreg[j]*1)
+      sumK <- 1 + sumK
+    }
+    
+  }
+  Avg <- sumW / sumK
+  Avg
+}
+# passing specific row as new_data, target_data, whole normalized data, with k = 4
+for (i in 1: nrow(new_data)){
+  Mg <- knn.reg(new_data[i,], target_data, train_data_N, 4) 
+  # printing results
+  print(paste0("Value imputes for row : " , i, " is " , Mg))
+
+}
+
+
+```
+
+##Problem 2
+
+Question 1.
+```{r}
+# reading dataset
+h <- read.csv("kc_house_data.csv", stringsAsFactors = FALSE)
+head(h)
+```
+Question 2.
+Creating train and target data
+```{r}
+# target_data extracting house price column
+target_data <- data.frame(price = h[,3])
+# train dataset with specific column only
+train_data <- h[,4:15]
+head(target_data)
+head(train_data)
+```
+Question 3.
+```{r}
+# Normalizing train data set
+train_data_N <- train_data
+for (i in 1:ncol(train_data_N)){
+  # skipping over waterfront and view 
+  if (i == 6 | i == 7){}
+  else{ train_data_N[i] <- (train_data_N[i] - min(train_data_N[i])) / (max(train_data_N[i])- min(train_data_N[i])) }
+  
+}
+head(train_data_N)
+```
+Question 4.
+Built own knn.reg function with nearest neighbour weighted average function to predict the price of new house, along with weighted average of 3 for nearest neighbour, 2 for 2nd nearest neighbour and 1 for all others. This function take 4 arguments new_data, target_data, train_data and K all of the data set passed is normalized data set apart from target_data as we have to predict original value of that.
+```{r}
+sumW <- 0
+sumK <- 0
+# Custom weighted avg knn function
+knn.reg <- function(new_data, target_data, train_data, k)
+{
+  # empty array for eucledian distance
+  euc_dist <- numeric(nrow(train_data))
+  # calculating eucledian distance
+  for(i in 1:nrow(train_data))
+  {
+    euc_dist[i] <- sqrt(sum((train_data[i,(1:12)]- new_data[1, (1:12)])^2))  
+  }
+  # getting k nearest neighbors
+  neighbor_knnreg <- target_data[order(euc_dist),] [1:k]
+  # calculating weighted avg
+  for (j in 1:k)
+  {
+    if(j==1){
+      sumW <- sumW + (neighbor_knnreg[j]*3)
+      sumK <- 3 + sumK
+    }
+    else if (j==2){
+      sumW <- sumW + (neighbor_knnreg[j]*2)
+      sumK <- 2 + sumK
+    }
+    else{
+      sumW <- sumW + (neighbor_knnreg[j]*1)
+      sumK <- 1 + sumK
+    }
+    
+  }
+  priceAvg <- sumW / sumK
+  priceAvg
+}
+
+```
+Question 5.
+Passed new case to predict the estimate price of new house using our own knn.reg function using k = 4
+```{r}
+# data to predict
+new_data <- data.frame(bedrooms = 4,  bathrooms = 3,  sqft_living = 4852, sqft_lot = 10244, floors = 3, waterfront = 0, view = 1, condition = 3, grade = 11, sqft_above = 1960, sqft_basement = 820, yr_built = 1978)
+
+new_data_N <- new_data
+# normalizing the new data
+for(i in 1:ncol(new_data_N))
+{
+  # skipping waterfront and view
+  if (i == 6 | i == 7){}
+  else{new_data_N[i] <- (new_data_N[i] - min(train_data[i])) / (max(train_data[i])- min(train_data[i]))}
+}
+# passing specific row as new_data, target_data, whole normalized data, with k = 4
+getPrice <- knn.reg(new_data_N, target_data, train_data_N, 4) 
+# Printing results
+paste0("Price of new house as predicted by KNN.reg is : " ,round(getPrice))
+
+```
+
