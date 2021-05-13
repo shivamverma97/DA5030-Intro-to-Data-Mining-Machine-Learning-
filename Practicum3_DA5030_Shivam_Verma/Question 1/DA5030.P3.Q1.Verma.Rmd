@@ -1,0 +1,184 @@
+---
+title: "Question-1 Practicum 3 DA5030"
+author: "Shivam Verma"
+output: pdf_document
+---
+# Problem 1
+
+Part 1. Download the data set Bank Marketing Data Set. Note that the data file does not contain header names; you may wish to add those. The description of each column can be found in the data set explanation.
+
+```{r}
+data <- read.csv("bank-additional-full.csv", header = T, sep = ";", stringsAsFactors = TRUE)
+summary(data)
+```
+
+Part 2. Explore the data set as you see fit and that allows you to get a sense of the data and get comfortable with it. Is there distributional skew in any of the features? Is there a need to apply a transform? 
+
+Generated histograms of features to check the skewness and the need for normalization. As most of the features are categorical values we can ignore them for scaling however, it is oserved some numeric features have skewness thus I applied normalization to them.
+
+```{r}
+# loop to generate histogram
+for(i in 1:ncol(data))
+{
+  # checking for the class of feature 
+  if (class(data[,i]) =="integer"| class(data[,i]) =="numeric"){
+    paste0("Histogram for : ", colnames(data[i]))
+  # generating histogram
+    hist((data[,i]), xlab = colnames(data[i]))
+  }
+    else{}
+  }
+    
+# loop for applying normalization to feature values
+for(i in 1:ncol(data))
+{
+  # checking for the class of feature
+  if (class(data[,i]) =="integer" | class(data[,i]) =="numeric"){
+  # applying normalization to feature values
+    data[,i] = (data[,i]-min(data[,i]))/(max(data[,i])-min(data[,i]))
+  }
+  else{}
+}
+
+# converting the labels to factors 
+data$y <- as.factor(data$y)
+```
+
+Splitting the data to Training and Testing
+
+```{r}
+set.seed(123)
+# creating a sample of 75% for train and 25% for test
+sample <- sample.int(n = nrow(data), size = floor(.75*nrow(data)), replace = F)
+train <- data[sample, ]
+test  <- data[-sample, ]
+```
+
+Part 3. Build a classification model using a support vector machine that predicts if a bank customer will open a term deposit account.
+
+Using kernlab library to apply svm model using ksvm function
+
+```{r}
+library(kernlab)
+# Generating svm classifier using RBF kernel.
+svm_classifier <- ksvm(y ~. , data= train, kernel= "rbfdot", kpar=list(sigma=0.015), C=70, cross=4,prob.model=TRUE)
+# summarizing the classifier
+svm_classifier
+```
+
+Predicting values using a support vector machine classifier. 
+
+It is observed that we got an accuracy of 91.4% for the SVM classifier.
+
+```{r}
+# Predicting the class of test data
+prediction <- predict(svm_classifier, test[,-21])
+# Getting class probabilities for the test data 
+p <- predict(svm_classifier, test[,-21], type = "probabilities")
+library(caret)
+# Generating the confusion matrix for the model
+confusionMatrix(test$y, prediction)
+```
+
+Part 4. Build another classification model using a neural network that also predicts if a bank customer will open a term deposit account.
+
+Neural Network works with numerical features to give optimal results hence, I converted the non-categorical feature values to numeric format. To reduce the computational time of the model, I also altered some values, like hidden node = 3, threshold = 0.5, stepmax = 1e+08 and linear output = False, so this algorithm with big data can work in Polynomial time instead of Non-Polynomial time.
+
+```{r}
+library(neuralnet)
+# creating a copy of data 
+data_neural_net <- data
+# loop for checking the data type
+for(i in 1:ncol(data_neural_net))
+{
+  if (class(data_neural_net[,i]) !="integer" | class(data_neural_net[,i]) !="numeric")
+  {
+    # converting non-categorical feature values
+    data_neural_net[,i] = as.numeric(data_neural_net[,i])
+}
+else{}
+}
+
+# Soothning function for neural network
+softplus <- function(x) {
+  log(1+exp(x))
+}
+# Creating training and testing samples
+train_NN <- data_neural_net[sample, ]
+test_NN  <- data_neural_net[-sample, ]
+
+# Generating the Neural Net model
+neural_net_model <- neuralnet(y ~. , data = train_NN, act.fct=softplus, hidden = 3, threshold=0.5, rep=1, stepmax = 1e+08, linear.output = F)
+print("NeuralNet plot")
+# Plotting the neural net model
+plot(neural_net_model, rep="best")
+```
+
+Getting Predictions for test data
+
+It is observed the correlation between values comes out to be 0.62
+
+```{r}
+# computing predictions for test data
+model_results <- neuralnet::compute(neural_net_model, test_NN[,-21])
+
+# storing result in variable
+predicted_strength <- model_results$net.result
+
+# calculating correlation
+print("Correlation between default values and predicted values by Neural Net")
+cor(predicted_strength, test_NN$y)
+```
+
+Part 5. Compare the accuracy of the two models based on AUC.
+
+For AUC plot we need the probability of predicted classes, which we take in terms of by plotting a graph by True Positive vs False positive, we build a curve graph with the each predicted probability for these two variables.There is a 50% line in AUC curve which serves as the base line, if the area under the curve is close to that line it means the model is not doing well. For plotting AUC curve for neural net is simple we have probability of each correlation within $net argument, but for SVM, I specifically calculated and stored values in variable p for each class.
+
+To compare models based on this graph it is observed that the Neural network clearly have better accuracy with ~ 94%. Although if we compare the same models on the basis of accuracy from confusion matrix it is observed SVM perform better with accuracy of about 91.5% whereas the correlation for neural net is ~ 0.60. This justifies the fact that although SVM has better prediction accuracy in comparison with Neural Network, but the rate of false positive over True positive is higher in Neural Net.
+
+```{r}
+library(pROC)
+# plotting Auc graph for SVM classifier
+print("AUC graph for SVM")
+plot.roc(roc(as.numeric(test$y), as.numeric(p[,1])), legacy.axes = TRUE, print.auc = TRUE, asp = NA, xlab = "False Positive SVM", ylab = "True Positive", col = "blue", lwd=2)
+
+# plotting Auc graph for Neural Net
+print("AUC graph for Neural Network")
+plot.roc(roc(test_NN$y, as.numeric(predicted_strength)), legacy.axes = TRUE, print.auc = TRUE, asp = NA, xlab = "False Positive Neural Net", ylab = "True Positive", col = "red", lwd=2)
+```
+
+Part 6. Calculate precision and recall for both models. See this article to understand how to calculate these metrics.
+
+Used caret package to calculate precision and recall for both the models.For calculating the precision and recall we need a matrix of false positve, false negative, true positve and true negative values predicted by the models, which is basically calculated on the bases of true values compared with predicted values.
+
+For precision we need True positive divided by true positive plus false positve,
+
+For recall we need True positive divided by true positive plus false negative.
+
+```{r}
+# precision for svm
+precision_svm <- posPredValue(prediction, test$y, positive="no")
+
+# recall for svm
+recall_svm <- sensitivity(prediction, test$y, positive="no")
+
+paste0("Precision for SVM : ", precision_svm)
+paste0("Recall for SVM : ", recall_svm)
+
+# storing values in different variable
+predicted_strength1 <- predicted_strength
+
+# changing the values on the basis of ratio of prediction to original factor values in dataset to get precision and recall for Neural Net
+predicted_strength1 <- ifelse(predicted_strength1>1.5, 2, 1)
+
+# precision for Neural net
+precision_NN <- posPredValue(as.factor(predicted_strength1), as.factor(test_NN$y), positive="1")
+
+# reacll for NeuralNet
+recall_NN <- sensitivity(as.factor(predicted_strength1), as.factor(test_NN$y), positive="1")
+
+paste0("Precision for NeuralNet : ", precision_NN)
+paste0("Recall for NeuralNet : ", recall_NN)
+
+```
+

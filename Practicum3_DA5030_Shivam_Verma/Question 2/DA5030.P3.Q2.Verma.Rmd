@@ -1,0 +1,126 @@
+---
+title: "Question-2 Practicum 3 DA5030"
+author: "Shivam Verma"
+output: pdf_document
+---
+
+# Problem 2
+
+Part 1. Download the data set Plant Disease Data Set. Note that the data file does not contain header names; you may wish to add those.
+
+```{r}
+library(arules)
+# Loading the data
+plant <- read.transactions("plants.data")
+# printing summary
+summary(plant)
+```
+
+Part 2. Explore the data set as you see fit and that allows you to get a sense of the data and get comfortable with it. Is there distributional skew in any of the features? Is there a need to apply a transform? 
+
+Exploring the dataset using functions like inspect, itemFrequency, frequencyPlot, and image to find out skewness of the data. The data mostly consisted of plant species and states. The data is scewed but, we dont have to normalize the data for further functionality.
+
+```{r}
+# viewing first five plants using inspect()
+inspect(plant[1:5])
+# see the proportion of data that contain the species
+itemFrequency(plant[, 1:3])
+# getting visualization with atleast 10% support
+itemFrequencyPlot(plant[1:5], support = 0.1)
+# Visualizing top 20 plants
+itemFrequencyPlot(plant, topN = 20)
+# the sparse matrix for the first five transactions
+image(plant[1:10000])
+# sparse matrix for the random selection of 10000 plants
+image(sample(plant, 10000))
+
+```
+
+Part 3. Use association rules to segment the data similar to what was done in Hämäläinen, W., & Nykänen, M. (2008, December). Efficient discovery of statistically significant association rules. In Data Mining, 2008. ICDM'08. Eighth IEEE International Conference on (pp. 203-212). IEEE.
+
+Setting the association rules for segmentation of the data using apriori function from arules package. Setting up support equal to 0.0001 and confidence level equal to 0.50. A confidence threshold of 0.50, which means that in order to be included in the results, the rule has to be correct at least 50 percent of the time. A support = 0.0001, in order to generate a rule, an item must have appeared in at least 0.0001 * 34781 = 3.4781 transactions.
+
+```{r}
+# using default setting of apriori results in non-significant rules
+apriori(plant)
+```
+
+```{r}
+# setting customized parameters using trial and error method to generate rules.
+plantrules <- apriori(plant, parameter = list(support = 0.0001, confidence = 0.50))
+# summarizing the generated rules
+summary(plantrules)
+# Inspecting the rules
+inspect(plantrules[1:10])
+```
+
+Part 4. Are there clusters in the data? Can plants be segmented into groups? Build a k-means clustering model to investigate. 
+
+To identify clusters in the data k-means algorithm can be applied, but for that the data format is not suitable. Data from transaction format of S4 vector needs to be convert into a matrix of binary variables with species on row and states on coloumn to represent 1 being present species in that state and 0 means not present. T convert it first I extracted plants with states each row unlist as vector, and then write it into the new csv file with seperated by comma ",". Then read that file, with 100 pre columns to store states. Then removed the empty coloumns from the data. 
+
+Next, applied reshape2 library, to melt the data on the basis of species to get just 2 rows with state and species. then used dcast and acast function to create a 35000 species X 70 row matrix with 1, or 0 variable. 
+
+After getting the matrix, I applied kmeans function with cluster value as 10.
+
+```{r}
+# unlist and converting it into vecotr
+plant_vector <- as.vector(unlist(plant@itemInfo))
+
+# writing it into file
+write(x = plant_vector, "plant_data.csv", sep=",")
+
+# reading file as dataframe
+plant_data <- read.csv("plant_data.csv", header=FALSE, fill = TRUE, col.names = paste0("V",1:100))
+
+# removing empty coloumns
+plant_data <- plant_data[,which(!is.na(plant_data[1,]))]
+
+library(reshape2)
+
+# melting data on based of V1 coloumn which is our species
+plant_data_modified <- melt(plant_data,id=c("V1"))
+
+# removing unwanted row created by melting
+plant_data_modified <- plant_data_modified[,c(1,3)]
+
+# creating data frame with 1, 0 binary variables represent if species available or not
+plant_data_modified1 <- dcast(plant_data_modified,V1~value)
+
+# creating matrix with same features
+plant_data_modified <- acast(plant_data_modified,V1~value)
+plant_data_modified <-plant_data_modified[,-1]
+```
+
+Applying K-means clustering algorithm setting k as 10. Large gap between cluster sizes is slightly concerning, it may be case some species are perdominantly present in some some states or it may be a random fluke caused by the initial k-means cluster centers.
+
+```{r}
+set.seed(123)
+# Creating clusters
+plant_clusters <- kmeans(plant_data_modified, 10)
+# Getting cluster sizes 
+plant_clusters$size
+# Getting cluster centers
+plant_clusters$centers
+```
+
+Part 5. Visualize the clusters.
+
+Visualizing the clusters using 2-D scatter plots, 3-D scatter plot, plotting clusters in 2-D axis.   
+
+```{r}
+# generating 2-D scatter plot
+print("2D graph with Jitters")
+plot(jitter(plant_data_modified), col = plant_clusters$cluster)
+points(plant_clusters$modes, col = 1:5, pch = 8)
+
+# plotting 3D scatterplot
+print("3D Scatter plot")
+scatterplot3d::scatterplot3d(plant_data_modified, color = plant_clusters$cluster)
+
+library(cluster)
+library(fpc)
+# Generating cluster plots
+plotcluster(plant_data_modified, plant_clusters$cluster)
+clusplot(plant_data_modified, plant_clusters$cluster, color=TRUE, shade=TRUE, labels=2, lines=0)
+```
+
