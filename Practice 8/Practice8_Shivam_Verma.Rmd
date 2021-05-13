@@ -1,0 +1,96 @@
+---
+title: "Practice 8_DA5030"
+author: "Shivam Verma"
+output: pdf_document
+---
+
+Problem 1.
+
+Step 2 – exploring and preparing the data
+```{r}
+teens <- read.csv("snsdata.csv")
+str(teens)
+table(teens$gender, useNA = "ifany")
+teens$age <- ifelse(teens$age >= 13 & teens$age < 20, teens$age, NA)
+summary(teens$age)
+```
+
+Data preparation – dummy coding missing values
+```{r}
+teens$female <- ifelse(teens$gender == "F" & !is.na(teens$gender), 1, 0)
+teens$no_gender <- ifelse(is.na(teens$gender), 1, 0)
+table(teens$gender, useNA = "ifany")
+table(teens$female, useNA = "ifany")
+table(teens$no_gender, useNA = "ifany")
+```
+
+Data preparation – imputing the missing values
+```{r}
+mean(teens$age, na.rm = TRUE)
+aggregate(data = teens, age ~ gradyear, mean, na.rm = TRUE)
+```
+
+```{r}
+ave_age <- ave(teens$age, teens$gradyear, FUN = function(x) mean(x, na.rm = TRUE))
+teens$age <- ifelse(is.na(teens$age), ave_age, teens$age)
+summary(teens$age)
+
+```
+
+Standardizing the data
+```{r}
+interests <- teens[5:40]
+interests_z <- as.data.frame(lapply(interests, scale))
+```
+
+Step 3 – training a model on the data
+```{r}
+set.seed(2345)
+teen_clusters <- kmeans(interests_z, 5)
+```
+
+Step 4 – evaluating model performance
+```{r}
+teen_clusters$size
+```
+Examining the coordinates of the cluster centroids
+```{r}
+teen_clusters$centers
+```
+
+Step 5 – improving model performance
+```{r}
+teens$cluster <- teen_clusters$cluster
+teens[1:5, c("cluster", "gender", "age", "friends")]
+aggregate(data = teens , age ~ cluster, mean)
+aggregate(data = teens, female ~ cluster, mean)
+aggregate(data = teens, friends ~ cluster, mean)
+
+```
+
+Problem 2.
+
+Ques 1.
+What are some of the key differences between SVM and Random Forest for
+classification? When is each algorithm appropriate and preferable? Provide examples:
+
+SVMs : Classification is done using hyperplanes, it is mostly used for classification problems with two classes. SVM can also be used for classification or numeric prediction problems. SVMs are a black box algorithm which means it is less interpretable. SVM is more effort demanding than Random Forest since finding the best model requires the testing of various combinations of kernels and model parameters.SVM is less subject to changes of data than Random Forest. SVM can be used in text categorization such as identification of the language used in a document or classification of documents by subject matter also for Optical Chracter Recognition.
+
+Random Forests : It is used for classification problems with more than two classes. Random Forest is prone to overfitting as compared to SVM. The result of the random forest classification is the probability of belonging to a class. Small changes in data can result in large changes in decisions thus varies final predictions. Random forests could be used for Credit scoring models, Diagnosis of medical conditions.
+
+Ques 2.
+Why might it be preferable to include fewer predictors over many?
+
+It is to avoid redundancy and irrelevance. It is unnecessary to contain those variables in the model since it will not only lower the training speed but also not elevate the model performance.If we include too many features it will be hard for intrepretation and can be time consuming for models that work on black box algorithms. Another problem is overfitting of model, it can work well on trining data but tends to perform poor on unseen data.
+
+Ques 3.
+You are asked to provide R-Squared for a kNN regression model. How would you respond to that request?
+
+R- square is generally used in estimation of accuracy of linear regression models. As KNN algorithm works on finding distance betwwen data then select n nearest observations to make predictions. As there is no regression model, thus we cannot find fitness of the model which is measured by R-squared.
+
+Ques 4.
+How can you determine which features to include when building a multiple regression model?
+
+We can you determine which features to include when building a multiple regression model using backward and forward elimination methods. Forward selection begins with an empty equation. Predictors are added one at a time beginning with the predictor with the highest correlation with the dependent variable. Whereas, backward elimination works in the reverse process that is, all the independent variables are entered into the equation first and each one is deleted one at a time if they do not contribute to the regression equation. In terms of elimination or feature addition, the selection can be done on multiple metrics - p value, AIC, R-squared values. step() function is helpful in performing these methods.
+
+
