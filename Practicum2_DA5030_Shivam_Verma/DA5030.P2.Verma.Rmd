@@ -1,0 +1,438 @@
+---
+title: "DA5030.P2.Verma"
+author: "Shivam Verma"
+output: pdf_document
+---
+Problem 1
+
+Part 1
+Download the data set. Add headers to the dataset.
+```{r}
+# reading the dataset
+census <- read.csv("adult.data", header = FALSE, stringsAsFactors = TRUE)
+# reading the dataset for description of the each column
+info <- read.csv("old.adult.names", header = FALSE)
+colnames(census) <- c("age", "workclass", "fnlwgt", "education", "education-num", "marital_status", "occupation", "relationship", "race", "sex", "capital_gain", "capital_loss", "hours_per_week", "native_country", "class")
+```
+
+Part 2
+Explore the data set as you see fit and that allows you to get a sense of the data and get comfortable with it. 
+```{r}
+#getting structure of data
+str(census)
+#getting summary of data
+summary(census)
+```
+
+Part 3
+Split the data set 75/25 so you retain 25% for testing using random sampling. 
+```{r}
+# segregating the age column to 4 bins(A,B,C,D)
+census$age[which(census$age>16 & census$age<=35)] <- "A" 
+census$age[which(census$age>35 & census$age<=54)] <- "B" 
+census$age[which(census$age>54 & census$age<=73)] <- "C" 
+census$age[which(census$age>73 & census$age<=92)] <- "D"
+
+# creating random sample of 75/25
+set.seed(123)
+random_sample <- sample(nrow(census), nrow(census)*0.75)
+# selecting features
+census_select_val <- census[,c("age", "education", "workclass", "sex", "race", "native_country", "class")]
+# creating train dataset
+census_select_val_train <- census_select_val[random_sample,]
+# creating test dataset
+census_select_val_test <- census_select_val[-random_sample,]
+
+```
+
+Part 4
+Using the Naive Bayes Classification algorithm from the KlaR, naivebayes, and e1071 packages, build an ensemble classifier that predicts whether an individual earns more than or less than US$50,000. Only use the features age, education, workclass, sex, race, and native-country. Ignore any other features in your model. You need to transform continuous variables into categorical variables by binning (use equal size bins from in to max).
+
+
+Applying specific algorithms and feature selection, binning already done in previous steps.
+```{r}
+library(e1071)
+library(gmodels)
+
+# Applying e1071 Naive Bayes Classification algorithm, traing on train data
+e1071_model <- naiveBayes(class~. , data = census_select_val_train)
+# predicting test data 
+prediction1 <- predict(e1071_model, census_select_val_test[,-7])
+# preparing the crosstable of applied model
+CrossTable(prediction1, census_select_val_test$class)
+
+```
+
+```{r}
+library(klaR)
+# Applying klaR Naive Bayes Classification algorithm, traing on train data
+klaR_model <- NaiveBayes (class ~., data = census_select_val_train)
+# predicting test data 
+prediction2 <- predict(klaR_model, census_select_val_test[,-7])
+# preparing the crosstable of applied model
+CrossTable(prediction2$class, census_select_val_test$class)
+```
+
+```{r}
+library(naivebayes)
+# Applying klaR Naive Bayes Classification algorithm, traing on train data
+NB_model <- naive_bayes(class~ age + education + workclass + sex + race + native_country ,data = census_select_val_train, laplace = 1)
+# predicting test data 
+prediction3 <- predict(NB_model, census_select_val_test[,-7])
+# preparing the crosstable of applied model
+CrossTable(prediction3, census_select_val_test$class)
+pred <- predict(NB_model, census_select_val_test[8142,-7])
+```
+
+```{r}
+# storing all model predictions in a new data frame
+model_prediction <- data.frame(as.character(prediction1), as.character(prediction2$class), as.character(prediction3))
+# naming the columns
+colnames(model_prediction)<-c("e1071_pred", "klaR_pred", "NB_pred")
+```
+
+```{r}
+# adding final predictions column
+model_prediction$final<- 0
+# creating mode function to make ensemble model
+calculate_mode <- function(x) {
+uniqx <- unique(x) 
+uniqx[which.max(tabulate(match(x, uniqx)))]
+}
+
+# passing each row to ensemble for final predictions 
+for (i in 1:nrow(model_prediction))
+{
+  # getting mode of each row for final predictions
+  model_prediction$final[i] <- calculate_mode(model_prediction[i,])
+  # Results stored in 1,0 format so converting the results
+  ifelse(model_prediction$final[i] == "1", model_prediction$final[i] <- " <=50K", model_prediction$final[i] <- " >50K" )
+
+}
+```
+
+
+Part 5 
+Create a full logistic regression model of the same features as in (4) (i.e., do not eliminate any features regardless of p-value). Be sure to either use dummy coding for categorical features or convert them to factor variables and ensure that the glm function does the dummy coding.
+```{r}
+#library(dummies)
+#age <- census_select_val_train$age
+#a <- dummy(age, sep = "_")
+# Code for dummy conversion although glm takes care of factor variables and does dummy coding and implement model.
+
+# creating a logistic model with selected feature values
+model.glm <- glm(class ~ age + education + workclass + sex + race + native_country, data = census_select_val_train, family = "binomial")
+#summarizing the model
+summary(model.glm)
+# predicting the test data using model
+prediction4 <- predict(model.glm, census_select_val_test, type = "response")
+# this model gives out probability, so setting threshold to 0.5 making predictions
+prediction4 <- ifelse(prediction4 > 0.5, 1,0)
+# Creating levels to convert to actual predictions
+prediction4 <- factor(prediction4, levels = c(0,1), labels = c(" <=50K", " >50K")) 
+# generating crosstable for the model
+CrossTable((prediction4), (census_select_val_test$class), dnn = c("predicted", "actual"))
+```
+
+Part 6
+Add the logistic regression model to the ensemble built in (4).
+```{r}
+# adding new model predictions to data frame
+model_prediction$glm_pred <- prediction4
+# making the final prediction column to 0
+model_prediction$final <- 0
+# passing each row for final predictions 
+for (i in 1:nrow(model_prediction))
+{
+  # calling mode function for final model predictions
+  model_prediction$final[i] <- calculate_mode(model_prediction[i,])
+  # results were in 1,0 format converting them to actual predictions
+  ifelse(model_prediction$final[i] == "1", model_prediction$final[i] <- " <=50K", model_prediction$final[i] <- " >50K" )
+
+}
+
+# generating crosstable for final ensemble predictions and test data 
+CrossTable(unlist(model_prediction$final), census_select_val_test$class)
+# generating confusion matrix for final ensemble predictions and test data
+caret::confusionMatrix(as.factor(unlist(model_prediction$final)), as.factor(census_select_val_test$class))
+
+
+```
+
+Part 7
+Using the ensemble model from (6), predict whether a 35-year-old white female adult who is a local government worker with a doctorate who immigrated from Portugal earns more or less than US$50,000. 
+```{r}
+# creating new data for prediction
+newData <- data.frame(age = "A",education = as.factor(" Doctorate"), workclass = " Local-gov", sex = " Female", race = " White", native_country = " Portugal", class = NA)
+# creating a temporary data equal to train data 
+census_train_temp  <- census_select_val_train
+# adding new case to temporary data
+census_train_temp <- rbind(census_train_temp , newData)
+# Predicting newData class using klaR model
+new_klar <- predict(klaR_model, newData)
+# Predicting newData class using Naive Bayes model
+new_NB <- predict(NB_model, census_train_temp[24421,-7])
+# Predicting newData class using e1071 model
+new_e <- predict(e1071_model, newData)
+# Predicting newData class using logistic regression model
+new_glm <- predict(model.glm, newData)
+# this model gives out probability, so setting threshold to 0.5 making predictions
+new_glm <- ifelse(new_glm >0.5, 1, 0)
+# Creating levels to convert to actual predictions
+new_glm <- factor(new_glm, levels = c(0, 1), labels = c(" <=50K", " >50K")) 
+# Creating new data predictions in a new data frame
+new_pred_data <- data.frame(new_klar$class, new_e, new_NB, final = NA, new_glm)
+# naming columns
+colnames(new_pred_data) <- c("e1071_pred", "klaR_pred", "NB_pred", "final", "glm_pred")
+# Adding new predictions to previous data frame
+model_prediction <- rbind(model_prediction, new_pred_data)
+# setting final predictions to 0
+model_prediction$final <- 0
+# Passing each row for getting final predictions
+for (i in 1:nrow(model_prediction))
+{
+  # calling mode function for final predictions
+  model_prediction$final[i] <- calculate_mode(model_prediction[i,])
+  # results were in 1,0 format converting it to actual predictions
+  ifelse(model_prediction$final[i] == "1", model_prediction$final[i] <- " <=50K", model_prediction$final[i] <- " >50K" )
+
+}
+print("The class for 35-year-old white female adult who is a local government worker with a doctorate who immigrated from Portugal would be:")
+model_prediction$final[8142]
+```
+
+Part 8
+Calculate accuracy and prepare confusion matrices for all three Bayes implementations (KlaR, naivebayes, e1071) and the logistic regression model. Compare the implementations and comment on differences. Be sure to use the same training data set for all three. 
+```{r}
+library(caret)
+# confusion matrix for e1071 predictions
+a <- confusionMatrix(prediction1, census_select_val_test$class)
+# printing matrix
+a
+# printing accuracy
+paste0("Accuracy for e1071 is : ", a$overall[1]*100, "%")
+# confusion matrix for klaR predictions
+b <- confusionMatrix(prediction2$class, census_select_val_test$class)
+# printing matrix
+b
+ # printing accuracy
+paste0("Accuracy for klaR is : ", b$overall[1]*100, "%")
+# confusion matrix for Naive Bayes predictions
+c <- confusionMatrix(prediction3, census_select_val_test$class)
+# printing matrix
+c
+ # printing accuracy
+paste0("Accuracy for Naive Bayes is : ", c$overall[1]*100, "%")
+# confusion matrix for logistic regression predictions
+d <- confusionMatrix(prediction4, census_select_val_test$class)
+# printing matrix
+d
+ # printing accuracy
+paste0("Accuracy for logistic regression is : ", d$overall[1]*100, "%")
+```
+
+Problem 2
+
+Part 1
+Load and then explore the data set on car sales referenced by the article Shonda Kuiper (2008) Introduction to Multiple Regression
+```{r}
+library(readxl)
+# Reading the dataset using readxl library
+cars_sales_price <- read_excel("kellycarsalesdata.xlsx")
+# exploring basic stats of data
+str(cars_sales_price)
+# summarizing the data
+summary(cars_sales_price)
+```
+
+Part 2
+Are there outliers in the data set? How do you identify outliers and how do you deal with them? Remove them but create a second data set with outliers removed. Keep the original data set.
+```{r}
+# creating second dataset
+cars_outlier <- cars_sales_price
+
+paste0("Total number of rows before outlier removal : ", nrow(cars_outlier))
+
+# loop for checking outliers
+for (i in 1:ncol(cars_outlier)){
+  
+  # getting mean and sd of each row
+  meanc <- mean(as.numeric(unlist(cars_outlier[,i])))
+  sdc <- sd(as.numeric(unlist(cars_outlier[,i])))
+  # setting threshold as 3 Sd
+  sdc <- sdc * 3
+  
+  print(paste0("Column Name : ", colnames(cars_outlier[i])))
+  
+  # printing row numbers which include outliers in each column
+  outlier <- (which(cars_outlier[,i] > meanc + sdc | cars_outlier[,i] < meanc - sdc))
+  print(outlier)
+  
+  # checking if there is any outlier in this column or not
+  if(length(outlier)!=0){
+    # if there is outlier removing it
+    cars_outlier <- cars_outlier[-outlier,]
+    
+    print(paste0("Rows in data after outliers removed : ", nrow(cars_outlier)))
+  }
+  
+}
+```
+Part 3
+What are the distributions of each of the features in the data set with outliers removed? Are they reasonably normal so you can apply a statistical learner such as regression? Can you normalize features through a log, inverse, or square-root transform? Transform as needed.
+
+Checking the distribution for each feature values using the Fitness of Good model under library fitdistrplus. Following are the observations each of the feature values:
+**Price is Log normal distribution**, **Mileage is Normal Distribution**, **Make is Normal Distribution**, **Cylinder is Uniform Distribution**, **Liter is Uniform Distribution**, **Doors is Beta Distribution**, **Cruise is Beta Distribution**, **Sound is Beta Distribution** and **Leather is also Beta Distribution**. Although few features are not normal but they are categorical values that is either 1 or 0 values, so they don't make much difference on model. Price column needs transformation, thus trying it with inverse transform.  
+
+```{r}
+library(fitdistrplus)
+# loop for traversing each feature 
+for(i in 1:ncol(cars_outlier))
+{
+  # Printing varaible name
+print(paste0("This graph is for : ", colnames(cars_outlier[i])))
+  # Make is a categorical variable so not plotting histogram 
+  if(i==3){
+    # demonstrating graph
+descdist(as.numeric(as.factor(unlist(cars_outlier[,i]))), discrete = FALSE)
+  }
+  else{
+    # demonstrating graph and histogram
+    descdist(as.numeric((unlist(cars_outlier[,i]))), discrete = FALSE)
+    hist(as.numeric((unlist(cars_outlier[,i]))), xlab = colnames(cars_outlier[i]), main=colnames(cars_outlier[i]))
+  }
+}
+```
+
+```{r}
+# Applying the inverse transform on Price to make it normally distributed 
+descdist((1/(as.numeric(unlist(cars_outlier[,1])))), discrete = F)
+print("Histogram for price column after applying inverse transform:")
+hist(as.numeric((unlist(cars_outlier[,1]))), xlab = "Price", main="Price Inverse")
+```
+
+Part 4
+What are the correlations to the response variable (car sales price) and are there collinearities? Build a full correlation matrix.
+```{r}
+print("Correlation Matrix")
+# Generating correlation matrix
+matrix <- cor(cars_outlier[sapply(cars_outlier, function (x) !is.character(x))])
+matrix
+library('corrplot') 
+# plotting matrix
+corrplot(corr = matrix , method = "circle")
+library(psych)
+print("Colinearity Graph:")
+# generating Colinearity graph and matrix
+pairs.panels(cars_outlier)
+
+
+```
+
+It is observed form Both the plots that features Cylinder and Liter are highly correlated and has a high colinearity factor.
+
+Part 5
+Split the data set 75/25 so you retain 25% for testing using random sampling.
+```{r}
+set.seed(123)
+# Creating random sample of 75/25 for data with outlier
+random_sample2 <- sample(nrow(cars_sales_price), nrow(cars_sales_price)*0.75)
+# splitting into train and test data
+cars_train <- cars_sales_price[random_sample2,]
+cars_test <- cars_sales_price[-random_sample2,]
+# Creating random sample of 75/25 for data without outlier
+random_sample3 <- sample(nrow(cars_outlier), nrow(cars_outlier)*0.75)
+# Splitting into train and test data
+cars_outlier_train <- cars_outlier[random_sample3,]
+cars_outlier_test <- cars_outlier[-random_sample3,]
+```
+
+Part 6
+Build a full multiple regression model for predicting car sales prices in this data set using the complete training data set (no outliers removed), i.e., a regression model that contains all features regardless of their p-values.
+```{r}
+# generating the model
+multiple_reg_model <- lm(Price~., data = cars_train)
+# summarizing the model
+summary(multiple_reg_model)
+```
+
+The linear model generated using lm() function predicts the Price for cars based on all feature values in the dataset present. It is observed features like Cylinder, Cruise, Sound, and Leather, are not closely correlated to Price of the car, as the p-value of there significance is greater than 0.05 level threshold, thus we can get rid of them by backward elimination method. Model has 0.8742 as Adjusted R-squared value its proportional to the improvement in model due to feature values. For RMSE we obtain 3487, which is basically standard deviation of the residuals, Residuals account for prediction errors. It depends on how far is the measure points from regresion line. RMSE is the measure how far they are spread, RMSE is high here, becuase we have a lots of features included.
+
+
+Part 7
+Build an ideal multiple regression model using backward elimination based on p-value for predicting car sales prices in this data set using the complete training data set with outliers removed (Question 2) and features transformed (Question 3). Provide a detailed analysis of the model using the training data set with outliers removed and features transformed, including Adjusted R-Squared, RMSE, and p-values of all coefficients. 
+
+```{r}
+# generating linear model using outlier removed and transformed data
+model_mult_outlier <- lm(Price~., data = cars_outlier_train)
+# summarizing the model
+summary(model_mult_outlier)
+```
+
+```{r}
+# removing insignificant features, based on p value > 0.05 i.e Leather
+model_mult_outlier1 <- lm(Price~ Mileage+ Make+ Cylinder+ Liter+ Doors+Cruise, data = cars_outlier_train)
+# Summarizing the model
+summary(model_mult_outlier1)
+```
+
+```{r}
+# removing insignificant features, based on p value > 0.05 i.e Cruise
+model_mult_outlier2 <- lm(Price~ Mileage+ Make+ Cylinder+ Liter+ Doors , data = cars_outlier_train)
+# Summarizing the model
+summary(model_mult_outlier2)
+```
+
+
+
+The ideal linear model generated using lm() function predicts the Price for cars based on selected feature values in the dataset present. It is observed features like Cruise and Leather, are not closely correlated to Price of the car in the initial model, as the p-value of there significance is greater than 0.05 level threshold, thus we can get rid of them by backward elimination system to obtain optimal results in final model. Model has 0.9044 as Adjusted R-squared value, significantly better than previous models, Adjusted R-squared value is proportional to the improvement in model due to feature values. For RMSE we obtained 2656, which is basically standard deviation of the residuals, Residuals account for prediction errors. It depends on how far is the measure points from regresion line. RMSE is the measure how far they are spread. Thus, all significant values are better than previously built models, so this results in an ideal model.
+
+
+
+(model_mult_outlier2) is the ideal linear model.
+
+
+
+
+Part 8
+On average, by how much do we expect a leather interior to change the resale value of a car based on the models built in (6) and in (7)? Note that 1 indicates the presence of leather in the car.
+
+For Model in (6) to identify the change in cost of car, I multiplied minimum and maximum values present of Leather in model to the Leather coefficient, based on model. Then I subtracted them to get the average of each model, this approach works on **range** i.e(max-min). Although minimum value is Null this change depends only on maximum values for this model. For model in (7), its an ideal model, with no outlier and only closely significant variables plus we dont have any leather coefficient in that model. Concludingly, on average based on Leather interior car cost will affect approximately, plus or minus +-117.0178.
+
+```{r}
+# getting min and max 
+min_leather <- min(cars_train$Leather)
+max_leather <- max(cars_train$Leather)
+#for model in (6) 
+print("On average car cost affects on presence of leather interior : ")
+multiple_reg_model$coefficients[13] * max_leather - multiple_reg_model$coefficients[13] * min_leather
+
+```
+
+Part 9
+Using the regression models of (6) and (7) what are the predicted resale prices of a 2005 4-door Saab with 61,435 miles with a leather interior, a 4-cylinder 2.3 liter engine, cruise control, and a premium sound system? Why are the predictions different?
+
+Difference between these predictions is due to the fact that Model in (7) has higher accuracy because the data we used has no outliers to affects prediction, and it is the ideal model with significant variables only which have p-value less then 0.05 significance level. This model also has high adjusted R- squared value and low RMSE values.
+
+```{r}
+# generating new dataset for predictions
+newcar <- data.frame("Price" = 0, "Mileage" = 61435, "Make" = "SAAB", "Cylinder" = 4, "Liter" = 2.3, "Doors" = 4, "Cruise" = 1, "Sound" = 1, "Leather" = 1)
+# prediction using two models
+paste0("Prediction using model in Part 6 : ", predict(multiple_reg_model, newcar))
+paste0("Prediction using model in Part 7 : ", predict(model_mult_outlier2, newcar))
+```
+
+Part 10
+For the regression model of (7), calculate the 95% prediction interval for the car in (9).
+```{r}
+# predicting price for new car
+new_car_pred <- predict(model_mult_outlier2, newcar)
+# This is standard error, from the summary of the model
+se <- 2656
+# Finding the confidence interval
+upper <- unname(new_car_pred + 1.96*(se))
+lower <- unname(new_car_pred - 1.96*(se))
+cat(sprintf("Predicted price: %f \n95%% Confidence interval: [%f, %f]", new_car_pred, lower, upper))
+
+```
+
