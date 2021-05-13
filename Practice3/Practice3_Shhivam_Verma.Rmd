@@ -1,0 +1,107 @@
+---
+title: "Practice3_DA5030"
+author: "Shivam Verma"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(caret)
+library(class)
+library(gmodels)
+```
+Implementing KNN using Class package.
+
+
+Step- 2 Preparing and exploring the data
+```{r}
+c <- read.csv("cancer.csv", stringsAsFactors = FALSE)
+# Checking if data is structured
+str(c)
+# Removing ID form data set as it don't provide useful information
+c <- c[-1]
+head(c)
+# Getting count distribution of pateints
+table(c$diagnosis_result)
+# Renaming Variables
+c$diagnosis <- factor(c$diagnosis_result, levels = c("B", "M"), labels = c("Benign", "Malignant"))
+# Returning results as percentage
+round(prop.table(table(c$diagnosis)) * 100, digits = 1)
+```
+Normalizing the data set.
+```{r}
+set.seed(1234)
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x))) }
+c_n <- as.data.frame(lapply(c[2:9], normalize))
+summary(c_n$radius)
+```
+Creating training and test data set.
+```{r}
+c_train <- c_n[1:65,]
+c_test <- c_n[66:100,]
+# Now considering daignosis factor into consideration.
+c_train_labels <- c[1:65, 10]
+c_test_labels <- c[66:100, 10]
+```
+Step-3 Training a model on data
+```{r}
+# Considering k as the square root of the number of observations.
+c_test_pred <- knn(train = c_train, test = c_test, cl = c_train_labels, k=10)
+```
+Step 4 – Evaluating the model performance
+```{r}
+CrossTable(x= c_test_labels, y= c_test_pred, prop.chisq = FALSE )
+```
+Out of 35 cases 7 are True Positive, 15 are True Negative (when positive class is Benign). Accuracy is determined by (TP+TN)/Total cases i.e. approx. 63%, thus there is room for improvement. 
+```{r}
+#Confusion Matrix for class:knn
+confusionMatrix(c_test_labels, c_test_pred)
+```
+Implementing KNN using Caret package 
+
+Using the same data splitted into 65:35 as train and test, as used before.
+
+```{r}
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+set.seed(1234)
+# Data Scaling Performed (Standardization using z-scores)
+knn_fit <- train(c_train_labels ~., data = cbind(c_train_labels, c_train), method = "knn",
+ trControl=trctrl,
+ preProcess = c("center", "scale"),
+ tuneLength = 10)
+#printing the model
+knn_fit
+#Predicted values
+c_caret_pred <- predict(knn_fit, newdata = c_test)
+
+```
+
+```{r}
+CrossTable(x= c_test_labels, y= c_caret_pred, prop.chisq = FALSE)
+```
+Out of 35 cases 10 are True Positive, 16 True Negative (when positive class is Benign). Accuracy is determined by (TP+TN)/Total cases i.e. approx. 75%.
+```{r}
+
+plot(knn_fit)
+
+```
+
+```{r}
+confusionMatrix(c_test_labels, c_caret_pred)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
