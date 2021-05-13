@@ -1,0 +1,177 @@
+---
+title: "Practice 7"
+author: "Shivam Verma"
+output: pdf_document
+---
+
+Problem 1
+
+Step 2 - Exploring and Preparing the Data
+```{r}
+concrete <- read.csv("concrete.csv")
+str(concrete)
+```
+
+Normalizing the Data
+```{r}
+normalize <- function (x)
+{
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+concrete_norm <- as.data.frame(lapply(concrete, normalize))
+
+summary(concrete_norm$strength)
+```
+
+Splitting Data into Training and Testing
+```{r}
+concrete_train <- concrete_norm[1:773, ]
+concrete_test <- concrete_norm[774:1030, ]
+```
+
+Step 3 - Training a model on the data
+```{r}
+library(neuralnet)
+concrete_model <- neuralnet(strength ~ cement + slag + ash + water + superplastic + coarseagg + fineagg + age, data = concrete_train)
+plot(concrete_model)
+```
+
+Step 4- Evaluating the model performance
+```{r}
+model_results <- compute(concrete_model, concrete_test[1:8])
+predicted_strength <- model_results$net.result
+cor(predicted_strength, concrete_test$strength)
+```
+
+Step 5 - Improving the model Performance
+```{r}
+concrete_model2 <- neuralnet(strength ~ cement + slag + ash + water + superplastic + 
+                               coarseagg + fineagg + age, data = concrete_train, hidden = 5)
+plot(concrete_model2)
+```
+
+Evaluating new model performance
+```{r}
+model_results2 <- compute(concrete_model2, concrete_test[1:8])  
+predicted_strength2 <- model_results2$net.result
+cor(predicted_strength2, concrete_test$strength)
+
+```
+Problem 2
+
+Step 2 - Exploring and Preparing the Data
+```{r}
+letters <- read.csv("letterdata.csv")
+str(letters)
+
+```
+
+Splitting Data into Training and Testing
+```{r}
+letters_train <- letters[1:16000, ]
+letters_test <- letters[16001:20000, ]
+```
+
+Step 3 – training a model on the data
+```{r}
+library(kernlab)
+letter_classifier <- ksvm(letter ~ ., data = letters_train, kernel = "vanilladot")
+letter_classifier
+```
+
+Step 4 – evaluating model performance
+```{r}
+letter_predictions <- predict(letter_classifier, letters_test)
+head(letter_predictions)
+
+```
+
+Generating Matrix 
+```{r}
+table(letter_predictions, letters_test$letter)
+
+```
+
+```{r}
+agreement <- letter_predictions == letters_test$letter
+table(agreement)
+prop.table(table(agreement))
+
+```
+
+Step 5 – improving model performance
+```{r}
+letter_classifier_rbf <- ksvm(letter ~. , data= letters_train, kernel= "rbfdot")
+letter_predictions_rbf <- predict(letter_classifier_rbf, letters_test)
+
+```
+
+Finding Accuracy of improved model
+```{r}
+agreement_rbf <- letter_predictions_rbf == letters_test$letter
+table(agreement_rbf)
+prop.table(table(agreement_rbf))
+
+```
+
+Problem 3 
+
+Step 2 - Exploring and Preparing the Data
+```{r}
+library(arules)
+# creating a sparse matrix for transaction data
+groceries <- read.transactions("groceries.csv" , sep = ",")
+summary(groceries)
+
+```
+
+Examining transaction data
+```{r}
+inspect(groceries[1:5])
+itemFrequency(groceries[, 1:3])
+```
+
+Visualizing item support – item frequency plots
+```{r}
+itemFrequencyPlot(groceries, support = 0.1)
+itemFrequencyPlot(groceries, topN = 20)
+```
+
+Visualizing the transaction data – plotting the sparse matrix
+```{r}
+image(groceries[1:5])
+image(sample(groceries, 100))
+```
+
+Step 3 – training a model on the data
+```{r}
+apriori(groceries)
+groceryrules <- apriori(groceries, parameter = list(support= 0.006, confidence = 0.25, minlen = 2))
+groceryrules
+```
+
+Step 4 – evaluating model performance
+```{r}
+summary(groceryrules)
+# looking at specific rules using the inspect() function
+inspect(groceryrules[1:3])
+```
+
+Step 5 – improving model performance
+```{r}
+# Sorting the set of association rules
+inspect(sort(groceryrules, by = "lift") [1:5])
+# Taking subsets of association rules
+berryrules <- subset(groceryrules, items %in% "berries")
+inspect(berryrules)
+```
+
+Saving association rules to a file or data frame
+```{r}
+write(groceryrules, file = "groceryrules.csv", sep = "," , quote = TRUE, row.names= FALSE)
+groceryrules_df <- as(groceryrules, "data.frame")
+str(groceryrules_df)
+
+```
+
