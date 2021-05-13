@@ -1,0 +1,142 @@
+---
+title: "Practice 5-DA5030"
+author: "Shivam Verma"
+output: pdf_document
+---
+
+```{r setup, include=TRUE,warning=FALSE}
+library(C50)
+library(gmodels)
+```
+Problem 1.
+
+Step 2 Exploring and Preparing the data
+```{r}
+credit <- read.csv("credit.csv")
+credit$default <- ifelse(credit$default==2, "Yes", "No")
+str(credit)
+table(credit$checking_balance)
+table(credit$savings_balance)
+summary(credit$months_loan_duration)
+summary(credit$amount)
+table(credit$default)
+```
+Data preparation - creating random training and test datasets
+```{r}
+set.seed(123)
+train_sample <- sample(1000, 900)
+str(train_sample)
+# creating train and test datasets
+credit_train <- credit[train_sample,]
+credit_test <- credit[-train_sample,]
+label <- as.factor(credit_train$default)
+prop.table(table(credit_train$default))
+prop.table(table(credit_test$default))
+```
+Step 3 - training a model on the data
+```{r}
+# passing credit_train without default column
+credit_model <- C5.0(credit_train[-17], label)
+credit_model
+summary(credit_model)
+```
+Step 4 - evaluating model performance
+```{r}
+credit_pred <- predict(credit_model, credit_test)
+CrossTable(credit_test$default, credit_pred, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn= c('actual default', 'predicted default'))
+```
+Accuracy is 68%
+
+Step 5 - Improving model performance 
+```{r}
+# applying adaptive boosting 
+credit_boost10 <- C5.0(credit_train[-17], label, trials = 10)
+credit_boost10
+summary(credit_boost10)
+```
+Checking enhanced accuracy
+```{r}
+credit_boost_pred10 <- predict(credit_boost10, credit_test)
+CrossTable(credit_test$default, credit_boost_pred10, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn= c('actual default', 'predicted default'))
+```
+Accuracy after boosting is 77% which is 9% more than the previous approach
+
+Assigning weights to the miss classifications 
+```{r}
+# making cost matrix
+matrix_dimensions <- list(c("no", "yes"), c("no", "yes")) 
+names(matrix_dimensions) <- c("predicted", "actual")
+error_cost <- matrix(c(0, 1, 4, 0), nrow = 2)
+error_cost
+```
+Performance evaluation with cost matrix
+```{r}
+credit_cost <- C5.0(credit_train[-17], label, costs = error_cost)
+credit_cost_pred <- predict(credit_cost, credit_test)
+CrossTable(credit_test$default, credit_cost_pred, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn= c('actual default', 'predicted default'))
+
+```
+
+Here accuracy comes out to be 70% which is less than boostiong method also this error cost method has high error rate than boosting method. However, if assigned weights are accurate, higher accuracy could be acheived.
+
+
+Problem 2. 
+
+Step 2 - Exploring and preparing the data
+```{r}
+mushrooms <- read.csv("mushrooms.csv", stringsAsFactors = TRUE)
+str(mushrooms)
+# As veil_type column is not significant thus  neglected
+mushrooms$veil_type <- NULL
+table(mushrooms$type)
+```
+Step 3 - training the model on the data
+```{r}
+library(RWeka)
+# using RWeka package to create decision tree with type column in dataset
+mushroom_1R <- OneR(type ~. , data= mushrooms)
+mushroom_1R
+```
+Step 4 - Evaluating the model Performance
+```{r}
+summary(mushroom_1R)
+```
+Step 5 - improving model performance
+```{r}
+# using JRip function of RWeka package for decision tree
+mushroom_JRip <- JRip(type ~. , data = mushrooms)
+mushroom_JRip
+```
+
+Problem 3.
+
+KNN Algorithm
+
+KNN is a simple algorithm that treats the features as coordinates in a multidimensional feature space. It also assumes similar cases are within close vicinity, while different cases are more distant to each other. Similarity between Instances are compared using Euclidean distance, thus there is a need of normalization and standardization. It is a non- parametric model I.e. no parameters are learned about the data. No learning of the model is required and all of the work happens at the time a prediction is requested. KNN algorithm usually performs better with small datasets with numeric features. This simple algorithm is useful when there’s no need to build a model, or tune parameters and make additional assumptions. As training phase occur very rapidly, the downside is that the process of making predictions tends to be relatively slow in comparison to training. Another disadvantage of kNN is its computational cost for new classifications, particularly with larger values of k. KNN tends to overfits the data. It is not an ideal algorithm to implement on high dimensional data, KNN is also sensitive to noisy data, missing values and outliers.
+
+Naive Bayes 
+
+This classification algorithm is based on Bayes Theorem of conditional probability. Naive Bayes assumes that all of the features in the dataset are equally important and independent i.e. presence of a particular feature in a class is unrelated to the presence of any other feature. This is a simple and fast algorithm that does well with the case of categorical input variables compared to numerical variables. It can handle data with noisy and missing values. There is no need for normalization and standardization of data as it relies on frequency of data. It also perform well with high dimensional data and multi class prediction. The major disadvantage of this algorithm is that it relies on assumption of equally important and independent features. It’s not ideal to use with numeric features. Another problem with this algorithm is “Zero-Frequency” I.e if a categorical variable has a category (in test data set), which was not observed in training data set, then model will assign a 0 (zero) probability and will be unable to make a prediction. To overcome this a smoothing technique is used. 
+
+C5.0 Decision Trees 
+
+This algorithm works on divide and conquer strategy, decision trees are generated by splitting the data, attributes of the data are chosen that most effectively splits its set of samples into subsets enriched in one class or the other. The splitting criterion is the information gain (difference in entropy), Gini index, etc. A Decision tree model is very intuitive and easy to explain to technical teams as well as stakeholders. Decisi
+rees work well with with large datasets and can handle noisy, outlier-prone data with relatively high accuracy. Decision trees are well-suited for data with a few highly relevant variables. This algorithm doesn’t require scaling and normalization of data, also missing values in the data doesn’t  affect the process of building decision tree to any considerable extent. The limitation of this algorithm is that a small change in the data can cause a large change in the structure of the decision tree causing instability. For a decision tree sometimes calculation can go far more complex compared to other algorithms thus, it require higher time to train the model. Decision tree training is relatively expensive as complexity and time taken is more. The model can be easily overfitted or underfitted although this could be adjusted using pruning. 
+
+1R Algorithm 
+
+Rule-based learners use a “separate and conquer” technique to identify rules that cover all instances in the dataset. 1R is a simple algorithm that utilizes one feature to inform rules and build decision tree. The error rate for the rule based on each feature is calculated and the rule with the fewest errors is chosen as the one rule. This algorithm performs well despite its simple approach. It works well on predominantly categorical data. 1R generates a single, easy-to-understand, human-readable rules to generate decision trees. Its disadvantage is that it uses only a single feature when considering rules for a complex data with large feature values. 
+
+Ripper Algorithm 
+
+This algorithm is based on separate and conquer approach. This algorithm creates much more complex rules than 1R algorithm, as more than one features are considered and rules with multiple antecedents are also created. Incremental pruning (tuning the feature vales) for error reduction is done for this algorithm. This improves the algorithm's ability to model complex data. This algorithm is not ideal to work with numeric datasets although it can handle large noisy data.
+
+ 
+Problem 4.
+
+A prediction model that is composed of a set of models is called a model ensemble. Each model makes prediction independently of other models in the ensemble. Given a large population of independent models, an ensemble can be very accurate even if the individual models in the ensemble perform only marginally better than random guessing. Different models from same dataset is built by inducing each model using a modified version of dataset. Final predictions are made by aggregating the predictions of different models in the ensemble. One of the benefits of using ensembles is that they may allow user to spend less time in pursuit of a single best model. The two standard approaches for creating ensemble models are:
+
+Boosting : In this technique more weights are assigned to the misclassifications in each iteration, so that each iterative model pays more attention to instances misclassified by the previous model. Models are iteratively created and added to the ensemble and stops when a predefined number of models have been added. Once models are created, the ensemble makes predictions using a weighted aggregate of the predictions made by individual models. 
+
+Bagging : In this approach each model in the ensemble is trained on a random sample of the dataset and sampling is done with replacement so that samples are different and models trained are also different. This technique works well with decision trees as overfitting of models could be avoided. In bagging each model is constructed independently and each model is assigned equal weight is giving out the final prediction. 
+
