@@ -1,0 +1,128 @@
+---
+Title: Practice-1 DA5030
+author: "Shivam Verma"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(Hmisc)
+```
+                                                Practice-1 DA5030
+                                                 
+                                                 
+
+
+Question 2.
+Download this data set and then upload the data into RStudio. Each row represents a customer's interactions with the organization's web store.
+
+```{r ,echo=TRUE}
+cust_data<- read.csv("customertxndata.csv")
+# Reading Dataset
+```
+
+Question 3.
+Calculate the following summative statistics: total transaction amount (revenue), mean number of visits, median revenue, standard deviation of revenue, most common gender.
+
+```{r ,echo=TRUE}
+colnames(cust_data) <- c("number of visits", "Transactions", "O.S", "Gender", "Revenue")
+attach(cust_data)
+
+cust_data %>%
+summarise(total_revenue=sum(Revenue, na.rm = T),mean_visits=mean(`number of visits`,
+na.rm = T), med_revenue=median(Revenue, na.rm = T), stdev_revenue=sd(Revenue, na.rm = T))
+
+# Finding most common gender
+table(Gender)
+print("Most common gender is male")
+```
+
+Question 4.
+Create a bar/column chart of gender (x-axis) versus revenue (y-axis).
+
+```{r ,echo=TRUE}
+ggplot(data= na.omit(cust_data), aes(x=Gender, y=Revenue)) +
+  geom_bar(stat="identity")
+```
+
+Question 5.
+What is the Pearson Moment of Correlation between number of visits and revenue? Comment on the correlation.
+
+```{r ,echo=TRUE}
+cor(`number of visits`, Revenue, method = "pearson")
+```
+As the pearson correlation is 0.738, this signifies that the variables are correlated and have a positive linear relationship
+
+
+Question 6.
+Which columns have missing data? How did you recognize them? How would you impute missing values?
+
+```{r ,echo=TRUE}
+table(is.na(Gender))
+table(is.na(`number of visits`))
+table(is.na(Transactions))
+table(is.na(O.S))
+table(is.na(Revenue))
+```
+Computed the frequency of NAs for each columns using table function.Imputation could be done using KNN algo, regression models and statistical measures(mean, median & mode) 
+
+
+
+Question 7.
+Impute missing transaction and gender values. Use the mean for transaction (rounded to the nearest whole number) and the mode for gender.
+
+```{r ,echo=TRUE}
+impute_trans <- round(impute(Transactions, mean))
+impute_gen <- impute(Gender, mode)
+head (impute_trans, 20)
+head (impute_gen, 20)
+```
+
+Question 8.
+Split the data set into two equally sized data sets where one can be used for training a model and the other for validation. Take every odd numbered case and add them to the training data set and every even numbered case and add them to the validation data set.
+
+```{r ,echo=TRUE}
+n <- nrow(cust_data)/2
+even <- seq(2, n-1, 2)
+odd <- seq(1,n, 2)
+
+
+valid_data <- cust_data[even,]
+train_data <- cust_data[odd,]
+  
+
+```
+
+Question 9.
+Calculate the mean revenue for the training and the validation data sets and compare them. Comment on the difference.
+
+```{r ,echo=TRUE}
+mean(valid_data$Revenue)
+mean(train_data$Revenue)
+```
+The mean revenue for training dataset is 458.25 and for validation dataset is 452.57, thus they seem slightly significant or close.
+
+
+Question 10.
+Use the sample() function to split the data set, so that 60% is used for training and 20% is used for testing, and another 20% is used for validation.
+ 
+```{r ,echo=TRUE}
+set.seed(77654) 
+
+sample <- sample.int(n = nrow(cust_data), size = floor(.60*nrow(cust_data)), replace = F)
+train <- cust_data[sample, ]
+
+newdata <- cust_data[-sample,] 
+
+sample2 <- sample.int( n= nrow(newdata), size = floor(.50*nrow(newdata)), replace = F)
+
+test  <- newdata[sample2, ]
+valid <- newdata[-sample2, ]
+
+mean(train$Revenue)
+mean(test$Revenue)
+mean(valid$Revenue)
+```
+
